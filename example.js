@@ -61,6 +61,12 @@ client.on('ready', async () => {
     client.pupPage.on('error', function(err) {
         console.log('Page error: ' + err.toString());
     });
+
+    setTimeout(async () => {
+        // Obtener una lista de todos los chats
+        const chats = await client.getChats();
+        console.log('CHATS', chats.map(chat => chat.name));
+    }, 3000);
     
 });
 
