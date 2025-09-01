@@ -241,8 +241,13 @@ exports.LoadUtils = () => {
             delete options.invokedBotWid;
         }
 
-        const lidUser = window.Store.User.getMaybeMeLidUser();
-        const meUser = window.Store.User.getMaybeMeUser();
+        const user = window.Store.User;
+        const lidUser = (typeof (user && user.getMeLidUser) === 'function' && user.getMeLidUser())
+            || (typeof (user && user.getMaybeMeLidUser) === 'function' && user.getMaybeMeLidUser())
+            || window.Store.Conn.wid;
+        const meUser = (typeof (user && user.getMeUser) === 'function' && user.getMeUser())
+            || (typeof (user && user.getMaybeMeUser) === 'function' && user.getMaybeMeUser())
+            || window.Store.Conn.wid;
         const newId = await window.Store.MsgKey.newId();
         let from = chat.id.isLid() ? lidUser : meUser;
         let participant;
@@ -838,7 +843,11 @@ exports.LoadUtils = () => {
 
     window.WWebJS.rejectCall = async (peerJid, id) => {
         peerJid = peerJid.split('@')[0] + '@s.whatsapp.net';
-        let userId = window.Store.User.getMaybeMeUser().user + '@s.whatsapp.net';
+        const user = window.Store.User;
+        const meUser = (typeof (user && user.getMeUser) === 'function' && user.getMeUser())
+            || (typeof (user && user.getMaybeMeUser) === 'function' && user.getMaybeMeUser())
+            || window.Store.Conn.wid;
+        let userId = (meUser && meUser.user ? meUser.user : String(meUser)).split('@')[0] + '@s.whatsapp.net';
         const stanza = window.Store.SocketWap.wap('call', {
             id: window.Store.SocketWap.generateId(),
             from: window.Store.SocketWap.USER_JID(userId),
