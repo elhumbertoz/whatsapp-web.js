@@ -234,11 +234,12 @@ class Client extends EventEmitter {
                      * @type {ClientInfo}
                      */
                 this.info = new ClientInfo(this, await this.pupPage.evaluate(() => {
-                    try {
-                        return { ...window.Store.Conn.serialize(), wid: window.Store.User.getMeUser() };
-                    } catch (e) {
-                        return { ...window.Store.Conn.serialize(), wid: window.Store.User.getMaybeMeUser() };
-                    }
+                    const connInfo = window.Store.Conn.serialize();
+                    const user = window.Store.User;
+                    const wid = (typeof (user && user.getMeUser) === 'function' && user.getMeUser())
+                        || (typeof (user && user.getMaybeMeUser) === 'function' && user.getMaybeMeUser())
+                        || window.Store.Conn.wid;
+                    return { ...connInfo, wid };
                 }));
 
                 this.interface = new InterfaceController(this);
