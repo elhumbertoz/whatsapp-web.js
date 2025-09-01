@@ -246,6 +246,7 @@ exports.LoadUtils = () => {
             || (typeof (user && user.getMaybeMeLidUser) === 'function' && user.getMaybeMeLidUser())
             || window.Store.Conn.wid;
         const meUser = (typeof (user && user.getMeUser) === 'function' && user.getMeUser())
+            || (typeof (user && user.getMaybeMePnUser) === 'function' && user.getMaybeMePnUser())
             || (typeof (user && user.getMaybeMeUser) === 'function' && user.getMaybeMeUser())
             || window.Store.Conn.wid;
         const newId = await window.Store.MsgKey.newId();
@@ -845,6 +846,7 @@ exports.LoadUtils = () => {
         peerJid = peerJid.split('@')[0] + '@s.whatsapp.net';
         const user = window.Store.User;
         const meUser = (typeof (user && user.getMeUser) === 'function' && user.getMeUser())
+            || (typeof (user && user.getMaybeMePnUser) === 'function' && user.getMaybeMePnUser())
             || (typeof (user && user.getMaybeMeUser) === 'function' && user.getMaybeMeUser())
             || window.Store.Conn.wid;
         let userId = (meUser && meUser.user ? meUser.user : String(meUser)).split('@')[0] + '@s.whatsapp.net';

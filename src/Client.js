@@ -237,6 +237,7 @@ class Client extends EventEmitter {
                     const connInfo = window.Store.Conn.serialize();
                     const user = window.Store.User;
                     const wid = (typeof (user && user.getMeUser) === 'function' && user.getMeUser())
+                        || (typeof (user && user.getMaybeMePnUser) === 'function' && user.getMaybeMePnUser())
                         || (typeof (user && user.getMaybeMeUser) === 'function' && user.getMaybeMeUser())
                         || window.Store.Conn.wid;
                     return { ...connInfo, wid };
