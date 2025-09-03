@@ -336,22 +336,7 @@ exports.LoadUtils = () => {
         await window.Store.HistorySync.sendPeerDataOperationRequest(3, {
             chatId: chat.id
         });
-        const getMsgFromStore = () => window.Store.Msg.get(newMsgKey._serialized);
-        let msg = getMsgFromStore();
-        const shouldWaitForAck = Boolean(options && options.waitUntilMsgSent);
-        const maxWaitMs = shouldWaitForAck ? 15000 : 5000;
-        const intervalMs = 100;
-        const startTime = Date.now();
-
-        while (
-            (!msg || (shouldWaitForAck && msg.ack < 1)) &&
-            (Date.now() - startTime) < maxWaitMs
-        ) {
-            await new Promise(r => setTimeout(r, intervalMs));
-            msg = getMsgFromStore();
-        }
-
-        return msg;
+        return window.Store.Msg.get(newMsgKey._serialized);
     };
 	
     window.WWebJS.editMessage = async (msg, content, options = {}) => {
