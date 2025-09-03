@@ -1,4 +1,5 @@
-const { Client, Location, Poll, List, Buttons, LocalAuth } = require('./index');
+const { Client, Location, Poll, List, Buttons, LocalAuth, MessageMedia } = require('./index');
+const fs = require('fs');
 
 const client = new Client({
     authStrategy: new LocalAuth(),
@@ -14,7 +15,7 @@ const client = new Client({
      * If another value is provided, the browser icon in 'linked devices' section will be gray.
      */
     // browserName: 'Firefox',
-    puppeteer: { 
+    puppeteer: {
         // args: ['--proxy-server=proxy-server-that-requires-authentication.example.com'],
         headless: false,
     },
@@ -38,7 +39,7 @@ client.on('qr', async (qr) => {
 });
 
 client.on('code', (code) => {
-    console.log('Pairing code:',code);
+    console.log('Pairing code:', code);
 });
 
 client.on('authenticated', () => {
@@ -62,12 +63,136 @@ client.on('ready', async () => {
     const debugWWebVersion = await client.getWWebVersion();
     console.log(`WWebVersion = ${debugWWebVersion}`);
 
-    client.pupPage.on('pageerror', function(err) {
+    client.pupPage.on('pageerror', function (err) {
         console.log('Page error: ' + err.toString());
     });
-    client.pupPage.on('error', function(err) {
+    client.pupPage.on('error', function (err) {
         console.log('Page error: ' + err.toString());
-    });    
+    });
+    
+    // Monitoreo adicional de errores de red y conexión
+    client.pupPage.on('requestfailed', (request) => {
+        console.log('Request failed:', request.url(), request.failure()?.errorText);
+    });
+    
+    client.pupPage.on('response', (response) => {
+        if (!response.ok()) {
+            console.log('HTTP error response:', response.status(), response.url());
+        }
+    });
+
+    const receivers = [
+        '593984958499@c.us'
+    ];
+    let index = 0;
+    let isProcessing = false;
+    let cachedMedia = null;
+    let retryCount = 0;
+    const maxRetries = 3;
+
+    // Cache del archivo para evitar descargarlo repetidamente
+    const cacheMedia = async () => {
+        try {
+            console.log('Descargando y cacheando archivo Excel...');
+            const media = await MessageMedia.fromUrl('https://datadash-local.s3.us-east-2.amazonaws.com/23/alta-masiva_v1.1-DataCobro.xlsx', {
+                unsafeMime: true
+            });
+            
+            media.mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+            media.filename = 'nombre_del_archivo.xlsx';
+            
+            cachedMedia = media;
+            console.log('Archivo cacheado exitosamente');
+        } catch (error) {
+            console.error('Error cacheando archivo:', error);
+            throw error;
+        }
+    };
+
+    // Función para enviar mensaje con reintentos y manejo de errores
+    const sendMessageWithRetry = async (receiver, media, options, retries = 0) => {
+        try {
+            const result = await client.sendMessage(receiver, media, {
+                ...options,
+                waitUntilMsgSent: true  // Esperar confirmación
+            });
+
+            if (!result) {
+                throw new Error('No se recibió confirmación del mensaje');
+            }
+
+            console.log('MESSAGE SENT', { 
+                id: result?.id?._serialized, 
+                receiver: receiver, 
+                caption: result?.body,
+                timestamp: new Date().toISOString()
+            });
+            
+            retryCount = 0; // Reset contador de reintentos en caso de éxito
+            return result;
+            
+        } catch (error) {
+            console.error(`Error enviando mensaje (intento ${retries + 1}/${maxRetries}):`, error.message);
+            
+            if (retries < maxRetries - 1) {
+                const delay = Math.min(1000 * Math.pow(2, retries), 10000); // Backoff exponencial, máximo 10s
+                console.log(`Reintentando en ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                return sendMessageWithRetry(receiver, media, options, retries + 1);
+            } else {
+                throw error;
+            }
+        }
+    };
+
+    // Cachear el archivo inicialmente
+    await cacheMedia();
+
+    const sendMessages = async () => {
+        if (isProcessing) {
+            console.log('Enviando mensaje anterior, saltando...');
+            return;
+        }
+
+        if (!cachedMedia) {
+            console.log('Media no disponible, intentando cargar...');
+            try {
+                await cacheMedia();
+            } catch (error) {
+                console.error('Error cargando media:', error);
+                return;
+            }
+        }
+
+        isProcessing = true;
+        
+        try {
+            await sendMessageWithRetry(receivers[index], cachedMedia, {
+                caption: 'Estimado cliente, gracias por preferirnos aquí está su factura'
+            });
+            
+            index++;
+            if (index >= receivers.length) {
+                index = 0;
+            }
+            
+        } catch (error) {
+            console.error('Error final enviando mensaje después de reintentos:', error);
+            retryCount++;
+            
+            // Si hay muchos errores consecutivos, re-cachear el archivo
+            if (retryCount >= 5) {
+                console.log('Muchos errores consecutivos, recacheando archivo...');
+                cachedMedia = null;
+                retryCount = 0;
+            }
+        } finally {
+            isProcessing = false;
+        }
+    };
+
+    // Intervalo más conservador para evitar límites de velocidad
+    setInterval(sendMessages, 5000); // Cada 5 segundos en lugar de 1
 });
 
 client.on('message', async msg => {
@@ -479,7 +604,7 @@ client.on('message', async msg => {
         // Or through the Chat object:
         // const chat = await client.getChatById(msg.from);
         // const isSynced = await chat.syncHistory();
-        
+
         await msg.reply(isSynced ? 'Historical chat is syncing..' : 'There is no historical chat to sync.');
     } else if (msg.body === '!statuses') {
         const statuses = await client.getBroadcasts();
@@ -544,7 +669,7 @@ client.on('message_ciphertext', (msg) => {
     // Receiving new incoming messages that have been encrypted
     // msg.type === 'ciphertext'
     msg.body = 'Waiting for this message. Check your phone.';
-    
+
     // do stuff here
 });
 
@@ -609,6 +734,20 @@ client.on('call', async (call) => {
 
 client.on('disconnected', (reason) => {
     console.log('Client was logged out', reason);
+});
+
+// Eventos adicionales para monitoreo de errores de mensajes
+client.on('message_ack', (msg, ack) => {
+    if (ack === -1) { // ACK_ERROR
+        console.error('Error ACK recibido para mensaje:', msg.id._serialized);
+    }
+});
+
+client.on('change_state', state => {
+    console.log('CHANGE STATE', state);
+    if (state === 'CONFLICT' || state === 'UNPAIRED') {
+        console.error('Estado problemático detectado:', state);
+    }
 });
 
 client.on('contact_changed', async (message, oldId, newId, isContact) => {
