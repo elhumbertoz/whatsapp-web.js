@@ -218,7 +218,7 @@ class Client extends EventEmitter {
                 }
 
                 if (isCometOrAbove) {
-                    await new Promise(r => setTimeout(r, 10000));
+                    await new Promise(r => setTimeout(r, 30000));
                     await this.pupPage.evaluate(ExposeStore);
                 } else {
                     // make sure all modules are ready before injection
