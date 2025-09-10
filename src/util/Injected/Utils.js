@@ -247,7 +247,7 @@ exports.LoadUtils = () => {
         let from = chat.id.isLid() ? lidUser : meUser;
         let participant;
 
-        if (typeof chat.id?.isGroup === 'function' && chat.id.isGroup()) {
+        if (chat.isGroup) {
             from = chat.groupMetadata && chat.groupMetadata.isLidAddressingMode ? lidUser : meUser;
             participant = window.Store.WidFactory.asUserWidOrThrow(from);
         }
@@ -326,11 +326,10 @@ exports.LoadUtils = () => {
             return msg;
         }
 
-        const [msgPromise, sendMsgResultPromise] = window.Store.SendMessage.addAndSendMsgToChat(chat, message);
-        await msgPromise;
-
-        if (options.waitUntilMsgSent) await sendMsgResultPromise;
-
+        await window.Store.SendMessage.addAndSendMsgToChat(chat, message);
+        await window.Store.HistorySync.sendPeerDataOperationRequest(3, {
+            chatId: chat.id
+        });
         return window.Store.Msg.get(newMsgKey._serialized);
     };
 	

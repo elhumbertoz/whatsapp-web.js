@@ -218,6 +218,7 @@ class Client extends EventEmitter {
                 }
 
                 if (isCometOrAbove) {
+                    await new Promise(r => setTimeout(r, 30000));
                     await this.pupPage.evaluate(ExposeStore);
                 } else {
                     // make sure all modules are ready before injection
@@ -365,6 +366,11 @@ class Client extends EventEmitter {
      * @returns {Promise<string>} - Returns a pairing code in format "ABCDEFGH"
      */
     async requestPairingCode(phoneNumber, showNotification = true, intervalMs = 180000) {
+        await exposeFunctionIfAbsent(this.pupPage, 'onCodeReceivedEvent', async (code) => {
+            this.emit(Events.CODE_RECEIVED, code);
+            return code;
+        });
+        
         return await this.pupPage.evaluate(async (phoneNumber, showNotification, intervalMs) => {
             const getCode = async () => {
                 while (!window.AuthStore.PairingCodeLinkUtils) {
