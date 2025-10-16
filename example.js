@@ -1,6 +1,120 @@
 const { Client, Location, Poll, List, Buttons, LocalAuth, MessageMedia } = require('./index');
 const fs = require('fs');
 
+// Estructura para almacenar resultados de encuestas
+const pollResults = {};  // { [pollId]: { [voterId]: [opciones seleccionadas] } }
+
+// Función completa para probar características de encuestas
+async function testPollFeature(msg) {
+    try {
+        console.log('📊 Iniciando prueba de encuestas...');
+        
+        // 1. Encuesta de opción única (solo una respuesta permitida)
+        const encuestaSencilla = new Poll(
+            '¿Cuál es tu lenguaje de programación favorito?',
+            ['JavaScript', 'Python', 'Java', 'C++', 'Go', 'Rust', 'PHP', 'TypeScript'],
+            { allowMultipleAnswers: false }
+        );
+        
+        const msgEncuesta1 = await msg.reply(encuestaSencilla);
+        console.log('✅ Encuesta de opción única enviada:', msgEncuesta1.id._serialized);
+        
+        // Esperar un momento antes de enviar la siguiente
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // 2. Encuesta de opción múltiple (varias respuestas permitidas)
+        const encuestaMultiple = new Poll(
+            '¿Qué frameworks de JavaScript usas? (puedes elegir varios)',
+            ['React', 'Vue.js', 'Angular', 'Svelte', 'Next.js', 'Express', 'NestJS', 'Otro'],
+            { allowMultipleAnswers: true }
+        );
+        
+        const msgEncuesta2 = await msg.reply(encuestaMultiple);
+        console.log('✅ Encuesta de opción múltiple enviada:', msgEncuesta2.id._serialized);
+        
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // 3. Encuesta con messageSecret personalizado (para identificación única)
+        const encuestaConId = new Poll(
+            '¿Cuál es tu experiencia con WhatsApp Web JS?',
+            ['Principiante', 'Intermedio', 'Avanzado', 'Experto'],
+            { 
+                allowMultipleAnswers: false,
+                messageSecret: Array(32).fill(0).map((_, i) => i) // [0,1,2,3...31]
+            }
+        );
+        
+        const msgEncuesta3 = await msg.reply(encuestaConId);
+        console.log('✅ Encuesta con ID personalizado enviada:', msgEncuesta3.id._serialized);
+        
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // 4. Encuesta de satisfacción con emoji
+        const encuestaSatisfaccion = new Poll(
+            '¿Qué tan satisfecho estás con este bot? 🤖',
+            ['⭐', '⭐⭐', '⭐⭐⭐', '⭐⭐⭐⭐', '⭐⭐⭐⭐⭐'],
+            { allowMultipleAnswers: false }
+        );
+        
+        const msgEncuesta4 = await msg.reply(encuestaSatisfaccion);
+        console.log('✅ Encuesta de satisfacción enviada:', msgEncuesta4.id._serialized);
+        
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // 5. Encuesta de decisión grupal (ideal para grupos)
+        const chat = await msg.getChat();
+        const tipoChat = chat.isGroup ? 'grupo' : 'chat privado';
+        
+        const encuestaDecision = new Poll(
+            `[${tipoChat.toUpperCase()}] ¿Qué día preferís para la reunión?`,
+            ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'],
+            { 
+                allowMultipleAnswers: chat.isGroup ? true : false // Múltiple si es grupo
+            }
+        );
+        
+        const msgEncuesta5 = await msg.reply(encuestaDecision);
+        console.log(`✅ Encuesta de decisión para ${tipoChat} enviada:`, msgEncuesta5.id._serialized);
+        
+        // Mensaje con instrucciones
+        await msg.reply(
+            `*🗳️ Prueba de Encuestas Completada*\n\n` +
+            `He enviado 5 tipos diferentes de encuestas:\n\n` +
+            `1️⃣ *Lenguajes de programación* - Opción única\n` +
+            `2️⃣ *Frameworks JavaScript* - Opción múltiple\n` +
+            `3️⃣ *Experiencia con la librería* - Con ID personalizado\n` +
+            `4️⃣ *Satisfacción con emojis* - Valoración con estrellas\n` +
+            `5️⃣ *Día de reunión* - ${chat.isGroup ? 'Múltiple (grupo)' : 'Única (privado)'}\n\n` +
+            `📊 *Los votos se registrarán automáticamente*\n` +
+            `💡 Usa *!pollresults* para ver los resultados actuales\n` +
+            `🔄 Usa *!clearpollresults* para limpiar los resultados`
+        );
+        
+        // Enviar encuesta a un chat específico si se proporciona
+        if (msg.body.includes(' ')) {
+            const targetChat = msg.body.split(' ')[1];
+            if (targetChat) {
+                try {
+                    const encuestaDirecta = new Poll(
+                        'Encuesta enviada desde ' + msg.from,
+                        ['Opción A', 'Opción B', 'Opción C'],
+                        { allowMultipleAnswers: false }
+                    );
+                    
+                    await client.sendMessage(targetChat, encuestaDirecta);
+                    await msg.reply(`✅ Encuesta adicional enviada a: ${targetChat}`);
+                } catch (error) {
+                    await msg.reply(`❌ No se pudo enviar encuesta a: ${targetChat}\nError: ${error.message}`);
+                }
+            }
+        }
+        
+    } catch (error) {
+        console.error('Error en testPollFeature:', error);
+        await msg.reply(`❌ Error al crear encuestas: ${error.message}`);
+    }
+}
+
 const client = new Client({
     authStrategy: new LocalAuth(),
     // proxyAuthentication: { username: 'username', password: 'password' },
@@ -70,6 +184,34 @@ client.on('ready', async () => {
         console.log('Page error: ' + err.toString());
     });
     
+    // Enviar encuesta automática después de 5 segundos
+    setTimeout(async () => {
+        try {
+            console.log('📊 Enviando encuesta automática a 593969626740@c.us...');
+            
+            const encuestaAutomatica = new Poll(
+                '¿Cómo calificarías nuestro servicio?',
+                ['Excelente ⭐⭐⭐⭐⭐', 'Muy bueno ⭐⭐⭐⭐', 'Bueno ⭐⭐⭐', 'Regular ⭐⭐', 'Necesita mejorar ⭐'],
+                { allowMultipleAnswers: false }
+            );
+            
+            const chatId = '593969626740@c.us';
+            const mensaje = await client.sendMessage(chatId, encuestaAutomatica);
+            
+            console.log('✅ Encuesta enviada exitosamente:', mensaje.id._serialized);
+            
+            // Mensaje de seguimiento
+            await client.sendMessage(chatId, 
+                '¡Hola! 👋\n\n' +
+                'Te hemos enviado una breve encuesta para conocer tu opinión sobre nuestro servicio.\n\n' +
+                'Tu feedback es muy importante para nosotros. ¡Gracias por participar! 🙏'
+            );
+            
+        } catch (error) {
+            console.error('❌ Error al enviar encuesta automática:', error);
+        }
+    }, 5000); // 5 segundos de delay
+    
     // Monitoreo adicional de errores de red y conexión
     client.pupPage.on('requestfailed', (request) => {
         console.log('Request failed:', request.url(), request.failure()?.errorText);
@@ -80,119 +222,6 @@ client.on('ready', async () => {
             console.log('HTTP error response:', response.status(), response.url());
         }
     });
-
-    const receivers = [
-        '593984958499@c.us'
-    ];
-    let index = 0;
-    let isProcessing = false;
-    let cachedMedia = null;
-    let retryCount = 0;
-    const maxRetries = 3;
-
-    // Cache del archivo para evitar descargarlo repetidamente
-    const cacheMedia = async () => {
-        try {
-            console.log('Descargando y cacheando archivo Excel...');
-            const media = await MessageMedia.fromUrl('https://datadash-local.s3.us-east-2.amazonaws.com/23/alta-masiva_v1.1-DataCobro.xlsx', {
-                unsafeMime: true
-            });
-            
-            media.mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-            media.filename = 'nombre_del_archivo.xlsx';
-            
-            cachedMedia = media;
-            console.log('Archivo cacheado exitosamente');
-        } catch (error) {
-            console.error('Error cacheando archivo:', error);
-            throw error;
-        }
-    };
-
-    // Función para enviar mensaje con reintentos y manejo de errores
-    const sendMessageWithRetry = async (receiver, media, options, retries = 0) => {
-        try {
-            const result = await client.sendMessage(receiver, media, {
-                ...options,
-                waitUntilMsgSent: true  // Esperar confirmación
-            });
-
-            if (!result) {
-                throw new Error('No se recibió confirmación del mensaje');
-            }
-
-            console.log('MESSAGE SENT', { 
-                id: result?.id?._serialized, 
-                receiver: receiver, 
-                caption: result?.body,
-                timestamp: new Date().toISOString()
-            });
-            
-            retryCount = 0; // Reset contador de reintentos en caso de éxito
-            return result;
-            
-        } catch (error) {
-            console.error(`Error enviando mensaje (intento ${retries + 1}/${maxRetries}):`, error.message);
-            
-            if (retries < maxRetries - 1) {
-                const delay = Math.min(1000 * Math.pow(2, retries), 10000); // Backoff exponencial, máximo 10s
-                console.log(`Reintentando en ${delay}ms...`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-                return sendMessageWithRetry(receiver, media, options, retries + 1);
-            } else {
-                throw error;
-            }
-        }
-    };
-
-    // Cachear el archivo inicialmente
-    await cacheMedia();
-
-    const sendMessages = async () => {
-        if (isProcessing) {
-            console.log('Enviando mensaje anterior, saltando...');
-            return;
-        }
-
-        if (!cachedMedia) {
-            console.log('Media no disponible, intentando cargar...');
-            try {
-                await cacheMedia();
-            } catch (error) {
-                console.error('Error cargando media:', error);
-                return;
-            }
-        }
-
-        isProcessing = true;
-        
-        try {
-            await sendMessageWithRetry(receivers[index], cachedMedia, {
-                caption: 'Estimado cliente, gracias por preferirnos aquí está su factura'
-            });
-            
-            index++;
-            if (index >= receivers.length) {
-                index = 0;
-            }
-            
-        } catch (error) {
-            console.error('Error final enviando mensaje después de reintentos:', error);
-            retryCount++;
-            
-            // Si hay muchos errores consecutivos, re-cachear el archivo
-            if (retryCount >= 5) {
-                console.log('Muchos errores consecutivos, recacheando archivo...');
-                cachedMedia = null;
-                retryCount = 0;
-            }
-        } finally {
-            isProcessing = false;
-        }
-    };
-
-    // Intervalo más conservador para evitar límites de velocidad
-    setInterval(sendMessages, 5000); // Cada 5 segundos en lugar de 1
 });
 
 client.on('message', async msg => {
@@ -513,6 +542,62 @@ client.on('message', async msg => {
                 ]
             })
         );
+    } else if (msg.body === '!testpoll') {
+        // Función completa para probar encuestas
+        await testPollFeature(msg);
+    } else if (msg.body === '!pollresults') {
+        // Mostrar resultados de todas las encuestas registradas
+        if (Object.keys(pollResults).length === 0) {
+            await msg.reply('📊 No hay resultados de encuestas registrados aún.');
+            return;
+        }
+        
+        let mensaje = '*📊 RESULTADOS DE ENCUESTAS ACTIVAS*\n\n';
+        
+        Object.entries(pollResults).forEach(([pollId, votos], index) => {
+            const totalVotantes = Object.keys(votos).length;
+            mensaje += `*Encuesta ${index + 1}* (ID: ...${pollId.slice(-8)})\n`;
+            mensaje += `👥 Total de votantes: ${totalVotantes}\n\n`;
+            
+            // Contar votos por opción
+            const conteoOpciones = {};
+            Object.values(votos).forEach(opciones => {
+                opciones.forEach(opcion => {
+                    conteoOpciones[opcion] = (conteoOpciones[opcion] || 0) + 1;
+                });
+            });
+            
+            // Ordenar opciones por cantidad de votos (de mayor a menor)
+            const opcionesOrdenadas = Object.entries(conteoOpciones)
+                .sort((a, b) => b[1] - a[1]);
+            
+            mensaje += '📋 *Opciones votadas:*\n';
+            opcionesOrdenadas.forEach(([opcion, cantidad]) => {
+                const porcentaje = totalVotantes > 0 ? ((cantidad / totalVotantes) * 100).toFixed(1) : 0;
+                const barras = '█'.repeat(Math.round(porcentaje / 10));
+                mensaje += `• ${opcion}: ${cantidad} voto(s) (${porcentaje}%) ${barras}\n`;
+            });
+            
+            mensaje += '\n' + '─'.repeat(30) + '\n\n';
+        });
+        
+        await msg.reply(mensaje);
+        
+    } else if (msg.body === '!clearpollresults') {
+        // Limpiar todos los resultados de encuestas
+        const cantidadEncuestas = Object.keys(pollResults).length;
+        
+        if (cantidadEncuestas === 0) {
+            await msg.reply('📊 No hay resultados de encuestas para limpiar.');
+            return;
+        }
+        
+        // Limpiar el objeto
+        Object.keys(pollResults).forEach(key => delete pollResults[key]);
+        
+        await msg.reply(`🗑️ Se han eliminado los resultados de ${cantidadEncuestas} encuesta(s).`);
+        console.log('🗑️ Resultados de encuestas limpiados');
+        
     } else if (msg.body === '!edit') {
         if (msg.hasQuotedMsg) {
             const quotedMsg = await msg.getQuotedMessage();
@@ -831,5 +916,43 @@ client.on('message_reaction', async (reaction) => {
 
 client.on('vote_update', (vote) => {
     /** The vote that was affected: */
-    console.log(vote);
+    console.log('📊 VOTO RECIBIDO:', vote);
+    
+    // Extraer información del voto
+    const pollId = vote.parentMsgKey?._serialized || vote.parentMessage?.id?._serialized;
+    const voterId = vote.voter;
+    const selectedOptions = vote.selectedOptions.map(opt => opt.name);
+    
+    // Registrar el voto en nuestra estructura
+    if (pollId) {
+        if (!pollResults[pollId]) {
+            pollResults[pollId] = {};
+        }
+        
+        // Si el array está vacío, el usuario quitó su voto
+        if (selectedOptions.length === 0) {
+            delete pollResults[pollId][voterId];
+            console.log(`❌ ${voterId} retiró su voto de la encuesta ${pollId}`);
+        } else {
+            pollResults[pollId][voterId] = selectedOptions;
+            console.log(`✅ ${voterId} votó por: ${selectedOptions.join(', ')} en encuesta ${pollId}`);
+        }
+        
+        // Mostrar resumen actual de votos para esta encuesta
+        const totalVotos = Object.keys(pollResults[pollId]).length;
+        console.log(`📈 Total de votos en esta encuesta: ${totalVotos}`);
+        
+        // Contar votos por opción
+        const conteoOpciones = {};
+        Object.values(pollResults[pollId]).forEach(opciones => {
+            opciones.forEach(opcion => {
+                conteoOpciones[opcion] = (conteoOpciones[opcion] || 0) + 1;
+            });
+        });
+        
+        console.log('📊 Distribución de votos:');
+        Object.entries(conteoOpciones).forEach(([opcion, votos]) => {
+            console.log(`   - ${opcion}: ${votos} voto(s)`);
+        });
+    }
 });
