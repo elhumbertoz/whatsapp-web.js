@@ -235,7 +235,7 @@ class Client extends EventEmitter {
                 }
 
                 if (isCometOrAbove) {
-                    await new Promise(r => setTimeout(r, 30000));
+                    await new Promise(r => setTimeout(r, 2000));
                     
                     // Intentar exponer Store con manejo de errores robusto
                     // ExposeStore ahora maneja módulos faltantes de forma segura
