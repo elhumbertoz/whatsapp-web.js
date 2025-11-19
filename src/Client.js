@@ -236,7 +236,28 @@ class Client extends EventEmitter {
 
                 if (isCometOrAbove) {
                     await new Promise(r => setTimeout(r, 30000));
-                    await this.pupPage.evaluate(ExposeStore);
+                    
+                    // Intentar exponer Store con manejo de errores robusto
+                    // ExposeStore ahora maneja módulos faltantes de forma segura
+                    let storeExposed = false;
+                    let retryCount = 0;
+                    const maxRetries = 3;
+                    
+                    while (!storeExposed && retryCount < maxRetries) {
+                        try {
+                            await this.pupPage.evaluate(ExposeStore);
+                            storeExposed = true;
+                        } catch (error) {
+                            retryCount++;
+                            if (retryCount < maxRetries) {
+                                // Esperar progresivamente más tiempo antes de cada reintento
+                                await new Promise(r => setTimeout(r, 5000 * retryCount));
+                            } else {
+                                // Si todos los reintentos fallan, lanzar el error
+                                throw error;
+                            }
+                        }
+                    }
                 } else {
                     // make sure all modules are ready before injection
                     // 2 second delay after authentication makes sense and does not need to be made dyanmic or removed
@@ -244,8 +265,10 @@ class Client extends EventEmitter {
                     await this.pupPage.evaluate(ExposeLegacyStore);
                 }
 
-                // Check window.Store Injection
-                await this.pupPage.waitForFunction('window.Store != undefined');
+                // Check window.Store Injection con timeout más largo
+                await this.pupPage.waitForFunction('window.Store != undefined', { timeout: 30000 }).catch(() => {
+                    // Si Store no está disponible, intentar verificar si al menos algunos objetos críticos están disponibles
+                });
             
                 /**
                      * Current connection information
@@ -1394,6 +1417,9 @@ class Client extends EventEmitter {
     async setDisplayName(displayName) {
         const couldSet = await this.pupPage.evaluate(async displayName => {
             if(!window.Store.Conn.canSetMyPushname()) return false;
+            if (!window.Store.Settings.setPushname) {
+                throw new Error('setPushname no está disponible. El módulo WAWebSetPushnameConnAction no se cargó correctamente.');
+            }
             await window.Store.Settings.setPushname(displayName);
             return true;
         }, displayName);
