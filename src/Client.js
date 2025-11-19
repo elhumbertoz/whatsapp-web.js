@@ -197,7 +197,24 @@ class Client extends EventEmitter {
             }
         });
 
-        await exposeFunctionIfAbsent(this.pupPage, 'onAppStateHasSyncedEvent', async () => {
+        // Flag para asegurar que READY solo se ejecute una vez
+        let readyEmitted = false;
+        let readyTimeout = null;
+
+        // Función auxiliar para ejecutar la lógica de inicialización y READY
+        const executeReadyLogic = async () => {
+            // Prevenir ejecución múltiple
+            if (readyEmitted) {
+                return;
+            }
+            readyEmitted = true;
+
+            // Cancelar el timeout si existe
+            if (readyTimeout) {
+                clearTimeout(readyTimeout);
+                readyTimeout = null;
+            }
+
             const authEventPayload = await this.authStrategy.getAuthEventPayload();
             /**
                  * Emitted when authentication is successful
@@ -251,7 +268,23 @@ class Client extends EventEmitter {
                  */
             this.emit(Events.READY);
             this.authStrategy.afterAuthReady();
+        };
+
+        await exposeFunctionIfAbsent(this.pupPage, 'onAppStateHasSyncedEvent', async () => {
+            await executeReadyLogic();
         });
+
+        // Timeout de 1 minuto: si no se ha emitido READY de forma orgánica, ejecutarlo manualmente
+        readyTimeout = setTimeout(async () => {
+            if (!readyEmitted) {
+                try {
+                    await executeReadyLogic();
+                } catch (error) {
+                    // Si hay un error al ejecutar READY por timeout, emitirlo pero no bloquear
+                    console.error('Error al ejecutar READY por timeout:', error);
+                }
+            }
+        }, 60000); // 1 minuto = 60000ms
         let lastPercent = null;
         await exposeFunctionIfAbsent(this.pupPage, 'onOfflineProgressUpdateEvent', async (percent) => {
             if (lastPercent !== percent) {
