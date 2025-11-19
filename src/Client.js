@@ -197,17 +197,17 @@ class Client extends EventEmitter {
             }
         });
 
-        // Flag para asegurar que READY solo se ejecute una vez
+        // Flags para controlar el flujo
         let readyEmitted = false;
+        let authenticatedEmitted = false;
         let readyTimeout = null;
 
         // Función auxiliar para ejecutar la lógica de inicialización y READY
         const executeReadyLogic = async () => {
-            // Prevenir ejecución múltiple
+            // Prevenir ejecución múltiple de READY
             if (readyEmitted) {
                 return;
             }
-            readyEmitted = true;
 
             // Cancelar el timeout si existe
             if (readyTimeout) {
@@ -215,12 +215,27 @@ class Client extends EventEmitter {
                 readyTimeout = null;
             }
 
-            const authEventPayload = await this.authStrategy.getAuthEventPayload();
-            /**
-                 * Emitted when authentication is successful
-                 * @event Client#authenticated
+            // Emitir AUTHENTICATED solo la primera vez
+            if (!authenticatedEmitted) {
+                const authEventPayload = await this.authStrategy.getAuthEventPayload();
+                /**
+                     * Emitted when authentication is successful
+                     * @event Client#authenticated
                  */
-            this.emit(Events.AUTHENTICATED, authEventPayload);
+                this.emit(Events.AUTHENTICATED, authEventPayload);
+                authenticatedEmitted = true;
+                
+                // Iniciar timeout de 30 segundos para READY después de autenticación
+                readyTimeout = setTimeout(async () => {
+                    if (!readyEmitted) {
+                        try {
+                            await executeReadyLogic();
+                        } catch (error) {
+                            console.error('Error al ejecutar READY por timeout:', error);
+                        }
+                    }
+                }, 30000); // 30 segundos después de autenticación
+            }
 
             const injected = await this.pupPage.evaluate(async () => {
                 return typeof window.Store !== 'undefined' && typeof window.WWebJS !== 'undefined';
@@ -285,6 +300,9 @@ class Client extends EventEmitter {
 
                 await this.attachEventListeners();
             }
+            // Marcar READY como emitido antes de emitirlo para prevenir ejecuciones duplicadas
+            readyEmitted = true;
+            
             /**
                  * Emitted when the client has initialized and is ready to receive messages.
                  * @event Client#ready
@@ -296,18 +314,6 @@ class Client extends EventEmitter {
         await exposeFunctionIfAbsent(this.pupPage, 'onAppStateHasSyncedEvent', async () => {
             await executeReadyLogic();
         });
-
-        // Timeout de 1 minuto: si no se ha emitido READY de forma orgánica, ejecutarlo manualmente
-        readyTimeout = setTimeout(async () => {
-            if (!readyEmitted) {
-                try {
-                    await executeReadyLogic();
-                } catch (error) {
-                    // Si hay un error al ejecutar READY por timeout, emitirlo pero no bloquear
-                    console.error('Error al ejecutar READY por timeout:', error);
-                }
-            }
-        }, 60000); // 1 minuto = 60000ms
         let lastPercent = null;
         await exposeFunctionIfAbsent(this.pupPage, 'onOfflineProgressUpdateEvent', async (percent) => {
             if (lastPercent !== percent) {
