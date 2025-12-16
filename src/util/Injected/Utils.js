@@ -243,7 +243,7 @@ exports.LoadUtils = () => {
         let from = chat.id.isLid() ? lidUser : meUser;
         let participant;
 
-        if (typeof chat.id?.isGroup === 'function' && chat.id.isGroup()) {
+        if (chat.isGroup) {
             from = chat.groupMetadata && chat.groupMetadata.isLidAddressingMode ? lidUser : meUser;
             participant = window.Store.WidFactory.asUserWidOrThrow(from);
         }

@@ -211,13 +211,45 @@ class Client extends EventEmitter {
             }
         });
 
-        await exposeFunctionIfAbsent(this.pupPage, 'onAppStateHasSyncedEvent', async () => {
-            const authEventPayload = await this.authStrategy.getAuthEventPayload();
-            /**
-                 * Emitted when authentication is successful
-                 * @event Client#authenticated
+        // Flags para controlar el flujo
+        let readyEmitted = false;
+        let authenticatedEmitted = false;
+        let readyTimeout = null;
+
+        // Función auxiliar para ejecutar la lógica de inicialización y READY
+        const executeReadyLogic = async () => {
+            // Prevenir ejecución múltiple de READY
+            if (readyEmitted) {
+                return;
+            }
+
+            // Cancelar el timeout si existe
+            if (readyTimeout) {
+                clearTimeout(readyTimeout);
+                readyTimeout = null;
+            }
+
+            // Emitir AUTHENTICATED solo la primera vez
+            if (!authenticatedEmitted) {
+                const authEventPayload = await this.authStrategy.getAuthEventPayload();
+                /**
+                     * Emitted when authentication is successful
+                     * @event Client#authenticated
                  */
-            this.emit(Events.AUTHENTICATED, authEventPayload);
+                this.emit(Events.AUTHENTICATED, authEventPayload);
+                authenticatedEmitted = true;
+                
+                // Iniciar timeout de 30 segundos para READY después de autenticación
+                readyTimeout = setTimeout(async () => {
+                    if (!readyEmitted) {
+                        try {
+                            await executeReadyLogic();
+                        } catch (error) {
+                            console.error('Error al ejecutar READY por timeout:', error);
+                        }
+                    }
+                }, 30000); // 30 segundos después de autenticación
+            }
 
             const injected = await this.pupPage.evaluate(async () => {
                 return typeof window.Store !== 'undefined' && typeof window.WWebJS !== 'undefined';
@@ -232,7 +264,29 @@ class Client extends EventEmitter {
                 }
 
                 if (isCometOrAbove) {
-                    await this.pupPage.evaluate(ExposeStore);
+                    await new Promise(r => setTimeout(r, 2000));
+                    
+                    // Intentar exponer Store con manejo de errores robusto
+                    // ExposeStore ahora maneja módulos faltantes de forma segura
+                    let storeExposed = false;
+                    let retryCount = 0;
+                    const maxRetries = 3;
+                    
+                    while (!storeExposed && retryCount < maxRetries) {
+                        try {
+                            await this.pupPage.evaluate(ExposeStore);
+                            storeExposed = true;
+                        } catch (error) {
+                            retryCount++;
+                            if (retryCount < maxRetries) {
+                                // Esperar progresivamente más tiempo antes de cada reintento
+                                await new Promise(r => setTimeout(r, 5000 * retryCount));
+                            } else {
+                                // Si todos los reintentos fallan, lanzar el error
+                                throw error;
+                            }
+                        }
+                    }
                 } else {
                     // make sure all modules are ready before injection
                     // 2 second delay after authentication makes sense and does not need to be made dyanmic or removed
@@ -266,12 +320,19 @@ class Client extends EventEmitter {
 
                 await this.attachEventListeners();
             }
+            // Marcar READY como emitido antes de emitirlo para prevenir ejecuciones duplicadas
+            readyEmitted = true;
+            
             /**
                  * Emitted when the client has initialized and is ready to receive messages.
                  * @event Client#ready
                  */
             this.emit(Events.READY);
             this.authStrategy.afterAuthReady();
+        };
+
+        await exposeFunctionIfAbsent(this.pupPage, 'onAppStateHasSyncedEvent', async () => {
+            await executeReadyLogic();
         });
         let lastPercent = null;
         await exposeFunctionIfAbsent(this.pupPage, 'onOfflineProgressUpdateEvent', async (percent) => {
@@ -392,6 +453,11 @@ class Client extends EventEmitter {
      * @returns {Promise<string>} - Returns a pairing code in format "ABCDEFGH"
      */
     async requestPairingCode(phoneNumber, showNotification = true, intervalMs = 180000) {
+        await exposeFunctionIfAbsent(this.pupPage, 'onCodeReceivedEvent', async (code) => {
+            this.emit(Events.CODE_RECEIVED, code);
+            return code;
+        });
+        
         return await this.pupPage.evaluate(async (phoneNumber, showNotification, intervalMs) => {
             const getCode = async () => {
                 while (!window.AuthStore.PairingCodeLinkUtils) {
@@ -1398,6 +1464,9 @@ class Client extends EventEmitter {
     async setDisplayName(displayName) {
         const couldSet = await this.pupPage.evaluate(async displayName => {
             if(!window.Store.Conn.canSetMyPushname()) return false;
+            if (!window.Store.Settings.setPushname) {
+                throw new Error('setPushname no está disponible. El módulo WAWebSetPushnameConnAction no se cargó correctamente.');
+            }
             await window.Store.Settings.setPushname(displayName);
             return true;
         }, displayName);
