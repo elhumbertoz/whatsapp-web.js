@@ -117,6 +117,7 @@ async function testPollFeature(msg) {
 
 const client = new Client({
     authStrategy: new LocalAuth(),
+    userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
     // proxyAuthentication: { username: 'username', password: 'password' },
     /**
      * This option changes the browser name from defined in user agent to custom.
@@ -183,34 +184,18 @@ client.on('ready', async () => {
     client.pupPage.on('error', function (err) {
         console.log('Page error: ' + err.toString());
     });
-    
-    // Enviar encuesta automática después de 5 segundos
-    setTimeout(async () => {
-        try {
-            console.log('📊 Enviando encuesta automática a 593969626740@c.us...');
-            
-            const encuestaAutomatica = new Poll(
-                '¿Cómo calificarías nuestro servicio?',
-                ['Excelente ⭐⭐⭐⭐⭐', 'Muy bueno ⭐⭐⭐⭐', 'Bueno ⭐⭐⭐', 'Regular ⭐⭐', 'Necesita mejorar ⭐'],
-                { allowMultipleAnswers: false }
-            );
-            
-            const chatId = '593969626740@c.us';
-            const mensaje = await client.sendMessage(chatId, encuestaAutomatica);
-            
-            console.log('✅ Encuesta enviada exitosamente:', mensaje.id._serialized);
-            
-            // Mensaje de seguimiento
-            await client.sendMessage(chatId, 
-                '¡Hola! 👋\n\n' +
-                'Te hemos enviado una breve encuesta para conocer tu opinión sobre nuestro servicio.\n\n' +
-                'Tu feedback es muy importante para nosotros. ¡Gracias por participar! 🙏'
-            );
-            
-        } catch (error) {
-            console.error('❌ Error al enviar encuesta automática:', error);
-        }
-    }, 5000); // 5 segundos de delay
+
+    // Enviar un media de ejemplo a 593969626740@c.us
+    const media = new MessageMedia(
+        'image/png',
+        'iVBORw0KGgoAAAANSUhEUgAAACsAAAAkCAYAAAAQC8MVAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAIFSURBVFhH7ZY/aBNRHMc/lcJtV3ComKMhQyOIAQenEhrKhWxFTC0t2dwOISiItqXIDbUiSKiLDrEgsR2EUAzUWpBSKUIWsYjQyS4SkUKHDrcFCjqlXB5p3+tdHzZwn+19v2/43Lvf/emJxWJ/6RIuiMF5JpLVRSSri0hWF5GsLrpKtif85zaFPW6THb5Cn/eTzS+fqW3siJvOhBCyNu6ySyGTxOwVqoNdai+KFN+crXQw2YTD8so09mVDbHw0aazNMelUaIhVQALMrE3prUwUwCA+6rK0YItFYE4hm6Iws8hq/RWFQZloC4PkbZdSRsyDoTQG8VtPWXx2h5QpNgAN1u8/Z721zE3xcjTevmNtgiGn3pYFQS6bK7FVLpA89jB3eWeN8LC1XNjiz2SyfcthE29vh83Xs6EeOukYuI/GThBVpNfAHLhB/skq3yuO2CojlbWvhTX1Y9CfmxZDZaSyl8SgxUGdubSF5R8BgAcjWJbF0Hwdz58fEfzipbLHcjGN+6GKkxALiN+t8ulxmo7PYwikso1DMfHRQViXKCqy7792vplH+IR1iqL06ko4VGsu6X6xEPA8PNOUi3rbWFdviqkS0pPlV5mJfJHKD8kJq4jub1O+F0wUpZP1c90mn8mSHewTm5Np/ubbxkcqIX8dTyf7n5GPwTkiktVFJKuLSFYXXSX7D567g6EtV88JAAAAAElFTkSuQmCC',
+        'imagen.png'
+    );
+    const msg = await client.sendMessage('593969626740@c.us', media, { 
+        caption: 'Esta es una imagen de ejemplo',
+        waitUntilMsgSent: true 
+    });
+    console.log('Media sent:', msg);
     
     // Monitoreo adicional de errores de red y conexión
     client.pupPage.on('requestfailed', (request) => {
@@ -225,7 +210,7 @@ client.on('ready', async () => {
 });
 
 client.on('message', async msg => {
-    console.log('MESSAGE RECEIVED', msg);
+    console.log('MESSAGE RECEIVED', msg?.id);
 
     if (msg.body === '!ping reply') {
         // Send a new message as a reply to the current one
@@ -233,7 +218,8 @@ client.on('message', async msg => {
 
     } else if (msg.body === '!ping') {
         // Send a new message to the same chat
-        client.sendMessage(msg.from, 'pong');
+        const msgSent = await client.sendMessage(msg.from, 'pong');
+        console.log('MESSAGE SENT', msgSent?.id);
 
     } else if (msg.body.startsWith('!sendto ')) {
         // Direct send a new message to specific id
