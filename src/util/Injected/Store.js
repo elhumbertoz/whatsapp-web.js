@@ -302,6 +302,16 @@ exports.ExposeStore = () => {
         }
     }
 
+    // NewsletterMetadata collection - critical for channel info updates
+    if (!window.Store.NewsletterMetadataCollection) {
+        try {
+            const mod = window.require('WAWebNewsletterMetadataCollection');
+            window.Store.NewsletterMetadataCollection = mod?.NewsletterMetadataCollection ?? mod?.default;
+        } catch {
+            // Module doesn't exist
+        }
+    }
+
     if (window.Store.Chat && (!window.Store.Chat._find || !window.Store.Chat.findImpl)) {
         window.Store.Chat._find = e => {
             const target = window.Store.Chat.get(e);
