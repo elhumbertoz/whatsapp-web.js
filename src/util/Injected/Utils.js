@@ -20,16 +20,11 @@ exports.LoadUtils = () => {
 
         try {
             window.Store.WAWebStreamModel.Stream.markAvailable();
-
-            if (canUseSendSeen && window.Store.SendSeen.sendSeen && !isChannel && !isStatus) {
-                await window.Store.SendSeen.sendSeen(chat);
-            } else if (window.Store.SendSeen.markSeen) {
-                // fallback aman
-                await window.Store.SendSeen.markSeen(chat);
-            } else {
-                return false;
-            }
-
+            await window.Store.SendSeen.sendSeen({
+                chat: chat,
+                threadId: undefined
+            });         
+            window.Store.WAWebStreamModel.Stream.markUnavailable();
             return true;
         } catch (err) {
             // fallback terakhir (ANTI CRASH)
@@ -453,7 +448,10 @@ exports.LoadUtils = () => {
             blob: file,
             type: 'sticker',
             signal: controller.signal,
-            mediaKey
+            mediaKey,
+            uploadQpl: window.Store.MediaUpload.startMediaUploadQpl({
+                entryPoint: 'MediaUpload'
+            }),
         });
 
         const stickerInfo = {
