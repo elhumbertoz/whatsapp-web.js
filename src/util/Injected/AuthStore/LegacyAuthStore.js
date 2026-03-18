@@ -10,8 +10,12 @@ exports.ExposeLegacyAuthStore = (moduleRaidStr) => {
     window.AuthStore.AppState = window.mR.findModule('Socket')[0].Socket;
     window.AuthStore.Cmd = window.mR.findModule('Cmd')[0].Cmd;
     window.AuthStore.Conn = window.mR.findModule('Conn')[0].Conn;
-    window.AuthStore.OfflineMessageHandler = window.mR.findModule('OfflineMessageHandler')[0].OfflineMessageHandler;
-    window.AuthStore.PairingCodeLinkUtils = window.mR.findModule('initializeAltDeviceLinking')[0];
+    window.AuthStore.OfflineMessageHandler = window.mR.findModule(
+        'OfflineMessageHandler',
+    )[0].OfflineMessageHandler;
+    window.AuthStore.PairingCodeLinkUtils = window.mR.findModule(
+        'initializeAltDeviceLinking',
+    )[0];
     window.AuthStore.Base64Tools = window.mR.findModule('encodeB64')[0];
     window.AuthStore.RegistrationUtils = {
         ...window.mR.findModule('getCompanionWebClientFromBrowser')[0],

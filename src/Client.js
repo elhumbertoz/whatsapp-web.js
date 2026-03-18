@@ -13,7 +13,9 @@ const {
     MessageTypes,
 } = require('./util/Constants');
 const { ExposeAuthStore } = require('./util/Injected/AuthStore/AuthStore');
-const { ExposeLegacyAuthStore } = require('./util/Injected/AuthStore/LegacyAuthStore');
+const {
+    ExposeLegacyAuthStore,
+} = require('./util/Injected/AuthStore/LegacyAuthStore');
 const { ExposeStore } = require('./util/Injected/Store');
 const { ExposeLegacyStore } = require('./util/Injected/LegacyStore');
 const { LoadUtils } = require('./util/Injected/Utils');
@@ -406,7 +408,9 @@ class Client extends EventEmitter {
                             await this.pupPage.evaluate(ExposeLegacyStore);
                         }
                     } catch (e) {
-                        console.warn('ExposeLegacyStore failed or not available');
+                        console.warn(
+                            'ExposeLegacyStore failed or not available',
+                        );
                     }
                 }
 
@@ -439,7 +443,9 @@ class Client extends EventEmitter {
                     this,
                     await this.pupPage.evaluate(() => {
                         return {
-                            ...window.require('WAWebConnModel').Conn.serialize(),
+                            ...window
+                                .require('WAWebConnModel')
+                                .Conn.serialize(),
                             wid:
                                 window
                                     .require('WAWebUserPrefsMeUser')
@@ -535,9 +541,9 @@ class Client extends EventEmitter {
                 const Cmd = window.require('WAWebCmd').Cmd;
                 Cmd.on('offline_progress_update_from_bridge', () => {
                     window.onOfflineProgressUpdateEvent(
-                        window.require('WAWebAuthStore')
-                            ?.OfflineMessageHandler
-                            ?.getOfflineDeliveryProgress(),
+                        window
+                            .require('WAWebAuthStore')
+                            ?.OfflineMessageHandler?.getOfflineDeliveryProgress(),
                     );
                 });
                 Cmd.on('logout', async () => {
