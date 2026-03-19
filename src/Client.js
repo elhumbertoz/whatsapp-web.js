@@ -1312,11 +1312,7 @@ class Client extends EventEmitter {
      * Closes the client
      */
     async destroy() {
-        const browser = this.pupBrowser;
-        const isConnected = browser?.isConnected?.();
-        if (isConnected) {
-            await browser.close();
-        }
+        await this.pupBrowser.close();
         await this.authStrategy.destroy();
     }
 

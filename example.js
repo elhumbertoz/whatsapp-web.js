@@ -14,7 +14,7 @@ const client = new Client({
      * If another value is provided, the browser icon in 'linked devices' section will be gray.
      */
     // browserName: 'Firefox',
-    puppeteer: {
+    puppeteer: { 
         // args: ['--proxy-server=proxy-server-that-requires-authentication.example.com'],
         headless: false,
     },
@@ -38,7 +38,7 @@ client.on('qr', async (qr) => {
 });
 
 client.on('code', (code) => {
-    console.log('Pairing code:', code);
+    console.log('Pairing code:',code);
 });
 
 client.on('authenticated', () => {
@@ -55,10 +55,10 @@ client.on('ready', async () => {
     const debugWWebVersion = await client.getWWebVersion();
     console.log(`WWebVersion = ${debugWWebVersion}`);
 
-    client.pupPage.on('pageerror', function (err) {
+    client.pupPage.on('pageerror', function(err) {
         console.log('Page error: ' + err.toString());
     });
-    client.pupPage.on('error', function (err) {
+    client.pupPage.on('error', function(err) {
         console.log('Page error: ' + err.toString());
     });
 });
@@ -619,7 +619,7 @@ client.on('message_ciphertext', (msg) => {
     // Receiving new incoming messages that have been encrypted
     // msg.type === 'ciphertext'
     msg.body = 'Waiting for this message. Check your phone.';
-
+    
     // do stuff here
 });
 
