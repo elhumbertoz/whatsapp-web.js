@@ -210,6 +210,12 @@ declare namespace WAWebJS {
             options?: MessageSendOptions,
         ): Promise<Message>;
 
+        /** Send a reaction to a specific messageId */
+        sendReaction(
+            messageId: string,
+            reaction: string,
+        ): Promise<void>;
+
         /** Sends a channel admin invitation to a user, allowing them to become an admin of the channel */
         sendChannelAdminInvite(
             chatId: string,
@@ -542,6 +548,15 @@ declare namespace WAWebJS {
             event: 'message_ciphertext',
             listener: (
                 /** The message that was ciphertext */
+                message: Message,
+            ) => void,
+        ): this;
+
+        /** Emitted when a ciphertext message failed to decrypt after recovery attempt */
+        on(
+            event: 'message_ciphertext_failed',
+            listener: (
+                /** The message that failed to decrypt */
                 message: Message,
             ) => void,
         ): this;
@@ -999,6 +1014,7 @@ declare namespace WAWebJS {
         CHAT_ARCHIVED = 'chat_archived',
         MESSAGE_RECEIVED = 'message',
         MESSAGE_CIPHERTEXT = 'message_ciphertext',
+        MESSAGE_CIPHERTEXT_FAILED = 'message_ciphertext_failed',
         MESSAGE_CREATE = 'message_create',
         MESSAGE_REVOKED_EVERYONE = 'message_revoke_everyone',
         MESSAGE_REVOKED_ME = 'message_revoke_me',
