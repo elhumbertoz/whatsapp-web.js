@@ -433,13 +433,13 @@ exports.LoadUtils = () => {
                     : meUser;
             participant = window
                 .require('WAWebWidFactory')
-                .asUserWidOrThrow(from);
+                .createWidFromWidLike(from);
         }
 
         if (typeof chat.id?.isStatus === 'function' && chat.id.isStatus()) {
             participant = window
                 .require('WAWebWidFactory')
-                .asUserWidOrThrow(from);
+                .createWidFromWidLike(from);
         }
 
         const newMsgKey = new (window.require('WAWebMsgKey'))({
