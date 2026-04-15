@@ -433,13 +433,13 @@ exports.LoadUtils = () => {
                     : meUser;
             participant = window
                 .require('WAWebWidFactory')
-                .asUserWidOrThrow(from);
+                .createWidFromWidLike(from);
         }
 
         if (typeof chat.id?.isStatus === 'function' && chat.id.isStatus()) {
             participant = window
                 .require('WAWebWidFactory')
-                .asUserWidOrThrow(from);
+                .createWidFromWidLike(from);
         }
 
         const newMsgKey = new (window.require('WAWebMsgKey'))({
@@ -1024,17 +1024,20 @@ exports.LoadUtils = () => {
 
         res.isBlocked = contact.isContactBlocked;
         if (!res.isBlocked) {
-            const alt = window
-                .require('WAWebApiContact')
-                .getAlternateUserWid(
-                    window
-                        .require('WAWebWidFactory')
-                        .asUserWidOrThrow(contact.id),
-                );
-            if (alt) {
-                res.isBlocked = !!window
-                    .require('WAWebCollections')
-                    .Blocklist.get(alt);
+            try {
+                const contactId = window
+                    .require('WAWebWidFactory')
+                    .asUserWidOrThrow(contact.id);
+                const alt = window
+                    .require('WAWebApiContact')
+                    .getAlternateUserWid(contactId);
+                if (alt) {
+                    res.isBlocked = !!window
+                        .require('WAWebCollections')
+                        .Blocklist.get(alt);
+                }
+            } catch (e) {
+                // Ignore errors for non-user WIDs
             }
         }
 
