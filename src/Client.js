@@ -633,7 +633,11 @@ class Client extends EventEmitter {
                 await this.authStrategy.afterBrowserInitialized();
                 this.lastLoggedOut = false;
             }
-            await this.inject();
+            try {
+                await this.inject();
+            } catch (error) {
+                // ignore error on injection
+            }
         });
     }
 
