@@ -333,7 +333,7 @@ exports.LoadUtils = () => {
                             .vcardGetNameFromParsed(parsed),
                     };
                 }
-            } catch (_) {
+            } catch (ignoredError) {
                 // not a vcard
             }
         }
@@ -361,7 +361,7 @@ exports.LoadUtils = () => {
                 content = options.buttons.body;
                 caption = content;
             } else {
-                caption = options.caption ? options.caption : ' '; //Caption can't be empty
+                caption = options.caption ? options.caption : ' '; // Caption can't be empty
             }
             buttonOptions = {
                 productHeaderImageRejected: false,
@@ -857,7 +857,7 @@ exports.LoadUtils = () => {
                         .require('WAWebCollections')
                         .WAWebNewsletterCollection.find(chatWid);
                 }
-            } catch (err) {
+            } catch (ignoredError) {
                 chat = null;
             }
         } else {
@@ -1026,11 +1026,7 @@ exports.LoadUtils = () => {
         if (!res.isBlocked) {
             const alt = window
                 .require('WAWebApiContact')
-                .getAlternateUserWid(
-                    window
-                        .require('WAWebWidFactory')
-                        .asUserWidOrThrow(contact.id),
-                );
+                .getAlternateUserWid(wid);
             if (alt) {
                 res.isBlocked = !!window
                     .require('WAWebCollections')
@@ -1080,19 +1076,17 @@ exports.LoadUtils = () => {
         const contacts = window
             .require('WAWebCollections')
             .Contact.getModelsArray();
-        return contacts.map(async (contact) => {
-            if (contact.isBusiness || contact.isEnterprise) {
-                const contactWid = window
-                    .require('WAWebWidFactory')
-                    .createWid(contact.id);
-                const bizProfile = await window
-                    .require('WAWebCollections')
-                    .BusinessProfile.find(contactWid);
-                bizProfile.profileOptions &&
-                    (contact.businessProfile = bizProfile);
-            }
-            return window.WWebJS.getContactModel(contact);
-        });
+        return Promise.all(
+            contacts.map(async (contact) => {
+                if (contact.isBusiness || contact.isEnterprise) {
+                    await window
+                        .require('WAWebCollections')
+                        .BusinessProfile.find(contact.id)
+                        .catch(() => {});
+                }
+                return window.WWebJS.getContactModel(contact);
+            }),
+        );
     };
 
     window.WWebJS.mediaInfoToFile = ({ data, mimetype, filename }) => {
@@ -1109,6 +1103,63 @@ exports.LoadUtils = () => {
             type: mimetype,
             lastModified: Date.now(),
         });
+    };
+
+    /**
+     * Resolves the media blob and metadata for a message.
+     * Shared by downloadMedia and downloadMediaStream.
+     * @param {string} msgId
+     * @returns {Promise<{blob: Blob, mimetype: string, filename: string, filesize: number}|null>}
+     */
+    window.WWebJS.resolveMediaBlob = async (msgId) => {
+        const { Msg } = window.require('WAWebCollections');
+        const msg =
+            Msg.get(msgId) ||
+            (await Msg.getMessagesById([msgId]))?.messages?.[0];
+
+        if (
+            !msg ||
+            !msg.mediaData ||
+            msg.mediaData.mediaStage === 'REUPLOADING'
+        ) {
+            return null;
+        }
+
+        // Always call internal downloadMedia - never skip based on
+        // mediaStage, because cache eviction can leave stage=RESOLVED
+        // with empty InMemoryMediaBlobCache.
+        await msg.downloadMedia({
+            downloadEvenIfExpensive: true,
+            rmrReason: 1,
+            isUserInitiated: true,
+        });
+
+        if (
+            msg.mediaData.mediaStage.includes('ERROR') ||
+            msg.mediaData.mediaStage === 'FETCHING'
+        ) {
+            return null;
+        }
+
+        const cached = window
+            .require('WAWebMediaInMemoryBlobCache')
+            .InMemoryMediaBlobCache.get(msg.mediaObject?.filehash);
+
+        let blob;
+        if (cached) {
+            blob = cached;
+        } else if (msg.mediaObject?.mediaBlob) {
+            blob = msg.mediaObject.mediaBlob.forceToBlob();
+        }
+
+        if (!blob) return null;
+
+        return {
+            blob,
+            mimetype: msg.mimetype,
+            filename: msg.filename,
+            filesize: msg.size,
+        };
     };
 
     window.WWebJS.arrayBufferToBase64 = (arrayBuffer) => {
@@ -1181,7 +1232,7 @@ exports.LoadUtils = () => {
             );
 
             return waveform;
-        } catch (e) {
+        } catch (ignoredError) {
             return undefined;
         }
     };
@@ -1418,7 +1469,7 @@ exports.LoadUtils = () => {
                         return base64Image;
                     }
                 }
-            } catch (error) {
+            } catch (ignoredError) {
                 /* empty */
             }
         }
@@ -1455,7 +1506,7 @@ exports.LoadUtils = () => {
                 rpcResult.value.addParticipant[0]
                     .addParticipantsParticipantAddedOrNonRegisteredWaUserParticipantErrorLidResponseMixinGroup
                     .value.addParticipantsParticipantMixins;
-        } catch (err) {
+        } catch (ignoredError) {
             data.code = 400;
             return data;
         }
@@ -1618,7 +1669,7 @@ exports.LoadUtils = () => {
                     ));
             }
             return result;
-        } catch (err) {
+        } catch (ignoredError) {
             return [];
         }
     };

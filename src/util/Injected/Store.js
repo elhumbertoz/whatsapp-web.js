@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 
 exports.ExposeStore = () => {
     /**
@@ -176,7 +176,7 @@ exports.ExposeStore = () => {
                 return pushnameModule && pushnameModule.setPushname
                     ? pushnameModule.setPushname
                     : null;
-            } catch (e) {
+            } catch (ignoredError) {
                 // Si el módulo no está disponible, retornar null
                 return null;
             }

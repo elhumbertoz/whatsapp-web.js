@@ -1,3 +1,4 @@
+const fs = require('fs');
 const { Client, Location, Poll, List, Buttons, LocalAuth } = require('./index');
 
 const client = new Client({
@@ -14,7 +15,7 @@ const client = new Client({
      * If another value is provided, the browser icon in 'linked devices' section will be gray.
      */
     // browserName: 'Firefox',
-    puppeteer: { 
+    puppeteer: {
         // args: ['--proxy-server=proxy-server-that-requires-authentication.example.com'],
         headless: false,
     },
@@ -38,7 +39,7 @@ client.on('qr', async (qr) => {
 });
 
 client.on('code', (code) => {
-    console.log('Pairing code:',code);
+    console.log('Pairing code:', code);
 });
 
 client.on('authenticated', () => {
@@ -55,10 +56,10 @@ client.on('ready', async () => {
     const debugWWebVersion = await client.getWWebVersion();
     console.log(`WWebVersion = ${debugWWebVersion}`);
 
-    client.pupPage.on('pageerror', function(err) {
+    client.pupPage.on('pageerror', function (err) {
         console.log('Page error: ' + err.toString());
     });
-    client.pupPage.on('error', function(err) {
+    client.pupPage.on('error', function (err) {
         console.log('Page error: ' + err.toString());
     });
 });
@@ -119,6 +120,7 @@ client.on('message', async (msg) => {
             await client.acceptInvite(inviteCode);
             msg.reply('Joined the group!');
         } catch (e) {
+            console.error(e);
             msg.reply('That invite code seems to be invalid.');
         }
     } else if (msg.body.startsWith('!addmembers')) {
@@ -150,7 +152,7 @@ client.on('message', async (msg) => {
          * }
          *
          * For more usage examples:
-         * @see https://github.com/pedroslopez/whatsapp-web.js/pull/2344#usage-example1
+         * @see https://github.com/wwebjs/whatsapp-web.js/pull/2344#usage-example1
          */
         console.log(result);
     } else if (msg.body === '!creategroup') {
@@ -201,7 +203,7 @@ client.on('message', async (msg) => {
          * }
          *
          * For more usage examples:
-         * @see https://github.com/pedroslopez/whatsapp-web.js/pull/2344#usage-example2
+         * @see https://github.com/wwebjs/whatsapp-web.js/pull/2344#usage-example2
          */
         console.log(result);
     } else if (msg.body === '!groupinfo') {
@@ -232,6 +234,18 @@ client.on('message', async (msg) => {
             Platform: ${info.platform}
         `,
         );
+    } else if (msg.body === '!streamdownload' && msg.hasMedia) {
+        const result = await msg.downloadMediaStream();
+        if (result) {
+            const filePath = `./${result.filename || 'download'}`;
+            const writeStream = fs.createWriteStream(filePath);
+            result.stream.pipe(writeStream);
+            writeStream.on('finish', () => {
+                msg.reply(
+                    `Media saved to ${filePath} (${result.mimetype}, ${result.filesize} bytes)`,
+                );
+            });
+        }
     } else if (msg.body === '!mediainfo' && msg.hasMedia) {
         const attachmentData = await msg.downloadMedia();
         msg.reply(`
@@ -619,7 +633,7 @@ client.on('message_ciphertext', (msg) => {
     // Receiving new incoming messages that have been encrypted
     // msg.type === 'ciphertext'
     msg.body = 'Waiting for this message. Check your phone.';
-    
+
     // do stuff here
 });
 

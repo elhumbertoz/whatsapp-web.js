@@ -150,14 +150,16 @@ exports.ExposeLegacyStore = () => {
         };
     }
 
-    // eslint-disable-next-line no-undef
+    const chatCollectionModule = window.mR.findModule('ChatCollection')[0];
     if (
-        (m = window.mR.findModule('ChatCollection')[0]) &&
-        m.ChatCollection &&
-        typeof m.ChatCollection.findImpl === 'undefined' &&
-        typeof m.ChatCollection._find !== 'undefined'
-    )
-        m.ChatCollection.findImpl = m.ChatCollection._find;
+        chatCollectionModule &&
+        chatCollectionModule.ChatCollection &&
+        typeof chatCollectionModule.ChatCollection.findImpl === 'undefined' &&
+        typeof chatCollectionModule.ChatCollection._find !== 'undefined'
+    ) {
+        chatCollectionModule.ChatCollection.findImpl =
+            chatCollectionModule.ChatCollection._find;
+    }
 
     const _isMDBackend = window.mR.findModule('isMDBackend');
     if (_isMDBackend && _isMDBackend[0] && _isMDBackend[0].isMDBackend) {
