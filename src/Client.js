@@ -23,6 +23,7 @@ const ChatFactory = require('./factories/ChatFactory');
 const ContactFactory = require('./factories/ContactFactory');
 const WebCacheFactory = require('./webCache/WebCacheFactory');
 const {
+    Base,
     ClientInfo,
     Message,
     MessageMedia,
@@ -2524,9 +2525,11 @@ class Client extends EventEmitter {
      */
     async createGroup(title, participants = [], options = {}) {
         !Array.isArray(participants) && (participants = [participants]);
-        participants.map((p) => (p instanceof Contact ? p.id._serialized : p));
+        participants = participants.map((p) =>
+            p instanceof Contact ? p.id._serialized : p,
+        );
 
-        return await this.pupPage.evaluate(
+        const res = await this.pupPage.evaluate(
             async (title, participants, options) => {
                 const {
                     messageTimer = 0,
@@ -2657,6 +2660,12 @@ class Client extends EventEmitter {
             participants,
             options,
         );
+
+        if (res && res.gid) {
+            res.gid = Base._normalizeId(res.gid);
+        }
+
+        return res;
     }
 
     /**

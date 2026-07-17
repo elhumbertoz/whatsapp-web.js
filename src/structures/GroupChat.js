@@ -1,6 +1,7 @@
 'use strict';
 
 const Chat = require('./Chat');
+const Base = require('./Base');
 
 /**
  * Group participant information
@@ -17,6 +18,26 @@ const Chat = require('./Chat');
 class GroupChat extends Chat {
     _patch(data) {
         this.groupMetadata = data.groupMetadata;
+
+        if (this.groupMetadata) {
+            if (this.groupMetadata.id) {
+                this.groupMetadata.id = Base._normalizeId(
+                    this.groupMetadata.id,
+                );
+            }
+            if (this.groupMetadata.owner) {
+                this.groupMetadata.owner = Base._normalizeId(
+                    this.groupMetadata.owner,
+                );
+            }
+            if (Array.isArray(this.groupMetadata.participants)) {
+                for (const p of this.groupMetadata.participants) {
+                    if (p.id) {
+                        p.id = Base._normalizeId(p.id);
+                    }
+                }
+            }
+        }
 
         return super._patch(data);
     }
@@ -130,7 +151,7 @@ class GroupChat extends Chat {
                     return errorCodes.iAmNotAdmin;
                 }
 
-                groupParticipants.map(({ id }) => {
+                groupParticipants = groupParticipants.map(({ id }) => {
                     return id.server === 'lid'
                         ? window.require('WAWebApiContact').getPhoneNumber(id)
                         : id;

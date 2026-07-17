@@ -64,7 +64,9 @@ class GroupNotification extends Base {
         this.recipientIds = [];
 
         if (data.recipients) {
-            this.recipientIds = data.recipients;
+            this.recipientIds = data.recipients.map((r) =>
+                typeof r === 'object' ? r._serialized || r.$1 : r,
+            );
         }
 
         return super._patch(data);
