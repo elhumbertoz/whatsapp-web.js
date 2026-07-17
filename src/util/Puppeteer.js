@@ -1,10 +1,7 @@
 /**
- * Expose a function to the page if it does not exist
- *
- * NOTE:
- * Rewrite it to 'upsertFunction' after updating Puppeteer to 20.6 or higher
- * using page.removeExposedFunction
- * https://pptr.dev/api/puppeteer.page.removeexposedfunction
+ * Expose a function to the page, re-registering it if the page has
+ * been reloaded and the browser-side binding was lost while Puppeteer's
+ * internal registry still holds a stale entry.
  *
  * @param {object} page - Puppeteer Page instance
  * @param {string} name
@@ -16,6 +13,11 @@ async function exposeFunctionIfAbsent(page, name, fn) {
     }, name);
     if (exist) {
         return;
+    }
+    try {
+        await page.removeExposedFunction(name);
+    } catch (ignoredError) {
+        // Not previously registered — nothing to remove.
     }
     await page.exposeFunction(name, fn);
 }
