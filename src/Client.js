@@ -333,162 +333,180 @@ class Client extends EventEmitter {
 
             // Flags para controlar el flujo
             let readyEmitted = false;
+            // Reentrancy guard: se marca de forma síncrona (sin await de por
+            // medio) para que una segunda invocación concurrente de
+            // executeReadyLogic (p. ej. onAppStateHasSyncedEvent disparado
+            // dos veces durante una re-inyección SPA) no vuelva a correr
+            // attachEventListeners() en paralelo y choque con
+            // exposeFunctionIfAbsent (error "already exists").
+            let readyInProgress = false;
             let authenticatedEmitted = false;
             let readyTimeout = null;
 
             // Función auxiliar para ejecutar la lógica de inicialización y READY
             const executeReadyLogic = async () => {
-                // Prevenir ejecución múltiple de READY
-                if (readyEmitted) {
+                // Prevenir ejecución múltiple/concurrente de READY
+                if (readyEmitted || readyInProgress) {
                     return;
                 }
+                readyInProgress = true;
 
-                // Cancelar el timeout si existe
-                if (readyTimeout) {
-                    clearTimeout(readyTimeout);
-                    readyTimeout = null;
-                }
+                try {
+                    // Cancelar el timeout si existe
+                    if (readyTimeout) {
+                        clearTimeout(readyTimeout);
+                        readyTimeout = null;
+                    }
 
-                // Emitir AUTHENTICATED solo la primera vez
-                if (!authenticatedEmitted) {
-                    const authEventPayload =
-                        await this.authStrategy.getAuthEventPayload();
-                    /**
-                     * Emitted when authentication is successful
-                     * @event Client#authenticated
-                     */
-                    this.emit(Events.AUTHENTICATED, authEventPayload);
-                    authenticatedEmitted = true;
+                    // Emitir AUTHENTICATED solo la primera vez
+                    if (!authenticatedEmitted) {
+                        const authEventPayload =
+                            await this.authStrategy.getAuthEventPayload();
+                        /**
+                         * Emitted when authentication is successful
+                         * @event Client#authenticated
+                         */
+                        this.emit(Events.AUTHENTICATED, authEventPayload);
+                        authenticatedEmitted = true;
 
-                    // Iniciar timeout de 30 segundos para READY después de autenticación
-                    readyTimeout = setTimeout(async () => {
-                        if (!readyEmitted) {
+                        // Iniciar timeout de 30 segundos para READY después de autenticación
+                        readyTimeout = setTimeout(async () => {
+                            if (!readyEmitted) {
+                                try {
+                                    await executeReadyLogic();
+                                } catch (error) {
+                                    console.error(
+                                        'Error al ejecutar READY por timeout:',
+                                        error,
+                                    );
+                                }
+                            }
+                        }, 30000); // 30 segundos después de autenticación
+                    }
+
+                    const injected = await this.pupPage.evaluate(async () => {
+                        return (
+                            typeof window.Store !== 'undefined' &&
+                            typeof window.WWebJS !== 'undefined'
+                        );
+                    });
+
+                    if (!injected) {
+                        if (
+                            this.options.webVersionCache.type === 'local' &&
+                            this.currentIndexHtml
+                        ) {
+                            const { type: webCacheType, ...webCacheOptions } =
+                                this.options.webVersionCache;
+                            const webCache = WebCacheFactory.createWebCache(
+                                webCacheType,
+                                webCacheOptions,
+                            );
+
+                            await webCache.persist(
+                                this.currentIndexHtml,
+                                version,
+                            );
+                        }
+
+                        if (isCometOrAbove) {
+                            await new Promise((r) => setTimeout(r, 2000));
+
+                            // Intentar exponer Store con manejo de errores robusto
+                            // ExposeStore ahora maneja módulos faltantes de forma segura
+                            let storeExposed = false;
+                            let retryCount = 0;
+                            const maxRetries = 3;
+
+                            while (!storeExposed && retryCount < maxRetries) {
+                                try {
+                                    await this.pupPage.evaluate(ExposeStore);
+                                    storeExposed = true;
+                                } catch (error) {
+                                    retryCount++;
+                                    if (retryCount < maxRetries) {
+                                        // Esperar progresivamente más tiempo antes de cada reintento
+                                        await new Promise((r) =>
+                                            setTimeout(r, 5000 * retryCount),
+                                        );
+                                    } else {
+                                        // Si todos los reintentos fallan, lanzar el error
+                                        throw error;
+                                    }
+                                }
+                            }
+                        } else {
+                            await new Promise((r) => setTimeout(r, 2000));
+                            // Check if ExposeLegacyStore is available, otherwise skip (new branch doesn't have it)
                             try {
-                                await executeReadyLogic();
-                            } catch (error) {
-                                console.error(
-                                    'Error al ejecutar READY por timeout:',
-                                    error,
+                                if (typeof ExposeLegacyStore !== 'undefined') {
+                                    await this.pupPage.evaluate(
+                                        ExposeLegacyStore,
+                                    );
+                                }
+                            } catch (ignoredError) {
+                                console.warn(
+                                    'ExposeLegacyStore failed or not available',
                                 );
                             }
                         }
-                    }, 30000); // 30 segundos después de autenticación
-                }
 
-                const injected = await this.pupPage.evaluate(async () => {
-                    return (
-                        typeof window.Store !== 'undefined' &&
-                        typeof window.WWebJS !== 'undefined'
-                    );
-                });
+                        //Load util functions (serializers, helper functions)
+                        await this.pupPage.evaluate(LoadUtils);
 
-                if (!injected) {
-                    if (
-                        this.options.webVersionCache.type === 'local' &&
-                        this.currentIndexHtml
-                    ) {
-                        const { type: webCacheType, ...webCacheOptions } =
-                            this.options.webVersionCache;
-                        const webCache = WebCacheFactory.createWebCache(
-                            webCacheType,
-                            webCacheOptions,
-                        );
-
-                        await webCache.persist(this.currentIndexHtml, version);
-                    }
-
-                    if (isCometOrAbove) {
-                        await new Promise((r) => setTimeout(r, 2000));
-
-                        // Intentar exponer Store con manejo de errores robusto
-                        // ExposeStore ahora maneja módulos faltantes de forma segura
-                        let storeExposed = false;
-                        let retryCount = 0;
-                        const maxRetries = 3;
-
-                        while (!storeExposed && retryCount < maxRetries) {
-                            try {
-                                await this.pupPage.evaluate(ExposeStore);
-                                storeExposed = true;
-                            } catch (error) {
-                                retryCount++;
-                                if (retryCount < maxRetries) {
-                                    // Esperar progresivamente más tiempo antes de cada reintento
-                                    await new Promise((r) =>
-                                        setTimeout(r, 5000 * retryCount),
-                                    );
-                                } else {
-                                    // Si todos los reintentos fallan, lanzar el error
-                                    throw error;
-                                }
+                        let start = Date.now();
+                        let res = false;
+                        while (start > Date.now() - 30000) {
+                            // Check window.Store Injection (crucial for some custom integrations)
+                            res = await this.pupPage.evaluate(
+                                'window.Store != undefined',
+                            );
+                            if (res) {
+                                break;
                             }
+                            await new Promise((r) => setTimeout(r, 200));
                         }
-                    } else {
-                        await new Promise((r) => setTimeout(r, 2000));
-                        // Check if ExposeLegacyStore is available, otherwise skip (new branch doesn't have it)
-                        try {
-                            if (typeof ExposeLegacyStore !== 'undefined') {
-                                await this.pupPage.evaluate(ExposeLegacyStore);
-                            }
-                        } catch (ignoredError) {
-                            console.warn(
-                                'ExposeLegacyStore failed or not available',
+                        if (!res) {
+                            throw new Error(
+                                'Store injection timeout - ready event cannot be emitted',
                             );
                         }
-                    }
 
-                    //Load util functions (serializers, helper functions)
-                    await this.pupPage.evaluate(LoadUtils);
-
-                    let start = Date.now();
-                    let res = false;
-                    while (start > Date.now() - 30000) {
-                        // Check window.Store Injection (crucial for some custom integrations)
-                        res = await this.pupPage.evaluate(
-                            'window.Store != undefined',
+                        /**
+                         * Current connection information
+                         * @type {ClientInfo}
+                         */
+                        this.info = new ClientInfo(
+                            this,
+                            await this.pupPage.evaluate(() => {
+                                return {
+                                    ...window
+                                        .require('WAWebConnModel')
+                                        .Conn.serialize(),
+                                    wid:
+                                        window
+                                            .require('WAWebUserPrefsMeUser')
+                                            .getMaybeMePnUser() ||
+                                        window
+                                            .require('WAWebUserPrefsMeUser')
+                                            .getMaybeMeLidUser(),
+                                };
+                            }),
                         );
-                        if (res) {
-                            break;
-                        }
-                        await new Promise((r) => setTimeout(r, 200));
+
+                        this.interface = new InterfaceController(this);
+
+                        await this.attachEventListeners();
                     }
-                    if (!res) {
-                        throw new Error(
-                            'Store injection timeout - ready event cannot be emitted',
-                        );
-                    }
+                    // Marcar READY como emitido antes de emitirlo para prevenir ejecuciones duplicadas
+                    readyEmitted = true;
+                    this._readyEmitted = true;
 
-                    /**
-                     * Current connection information
-                     * @type {ClientInfo}
-                     */
-                    this.info = new ClientInfo(
-                        this,
-                        await this.pupPage.evaluate(() => {
-                            return {
-                                ...window
-                                    .require('WAWebConnModel')
-                                    .Conn.serialize(),
-                                wid:
-                                    window
-                                        .require('WAWebUserPrefsMeUser')
-                                        .getMaybeMePnUser() ||
-                                    window
-                                        .require('WAWebUserPrefsMeUser')
-                                        .getMaybeMeLidUser(),
-                            };
-                        }),
-                    );
-
-                    this.interface = new InterfaceController(this);
-
-                    await this.attachEventListeners();
+                    this.emit(Events.READY);
+                    this.authStrategy.afterAuthReady();
+                } finally {
+                    readyInProgress = false;
                 }
-                // Marcar READY como emitido antes de emitirlo para prevenir ejecuciones duplicadas
-                this._readyEmitted = true;
-
-                this.emit(Events.READY);
-                this.authStrategy.afterAuthReady();
             };
 
             await exposeFunctionIfAbsent(
