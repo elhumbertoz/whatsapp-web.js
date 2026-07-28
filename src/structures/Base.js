@@ -28,8 +28,22 @@ class Base {
      * @returns {object}
      */
     static _normalizeId(id) {
-        if (id && id._serialized == null && id.$1 != null) {
-            return Object.assign({}, id, { _serialized: id.$1 });
+        if (!id) return id;
+        if (typeof id === 'string') {
+            return {
+                _serialized: id,
+                user: id.split('@')[0],
+                server: id.split('@')[1] || null,
+            };
+        }
+        if (typeof id === 'object') {
+            const serialized =
+                id._serialized ||
+                id.$1 ||
+                (id.user && id.server ? `${id.user}@${id.server}` : null);
+            if (serialized && id._serialized !== serialized) {
+                return Object.assign({}, id, { _serialized: serialized });
+            }
         }
         return id;
     }

@@ -3,6 +3,20 @@
 exports.LoadUtils = () => {
     window.WWebJS = {};
 
+    window.WWebJS.getSerializedId = (id) => {
+        if (!id) return null;
+        if (typeof id === 'string') return id;
+        if (id._serialized) return id._serialized;
+        if (id.$1) return id.$1;
+        if (id.user && id.server) return `${id.user}@${id.server}`;
+        if (
+            typeof id.toString === 'function' &&
+            id.toString() !== '[object Object]'
+        )
+            return id.toString();
+        return null;
+    };
+
     /**
      * Helper function that compares between two WWeb versions. Its purpose is to help the developer to choose the correct code implementation depending on the comparison value and the WWeb version.
      * @param {string} lOperand The left operand for the WWeb version string to compare with
@@ -832,14 +846,17 @@ exports.LoadUtils = () => {
 
         if (typeof msg.id.remote === 'object') {
             msg.id = Object.assign({}, msg.id, {
-                remote: msg.id.remote._serialized || msg.id.remote.$1,
+                remote: window.WWebJS.getSerializedId(msg.id.remote),
             });
         }
 
         // WhatsApp Web changed _serialized to $1 in message IDs (2026-07 update).
         // Normalize here so all downstream Node.js code can keep using _serialized.
-        if (msg.id && msg.id._serialized == null && msg.id.$1 != null) {
-            msg.id = Object.assign({}, msg.id, { _serialized: msg.id.$1 });
+        if (msg.id && msg.id._serialized == null) {
+            const serialized = window.WWebJS.getSerializedId(msg.id);
+            if (serialized) {
+                msg.id = Object.assign({}, msg.id, { _serialized: serialized });
+            }
         }
 
         delete msg.pendingAckUpdate;
@@ -927,26 +944,66 @@ exports.LoadUtils = () => {
 
     window.WWebJS.getChats = async () => {
         const chats = window.require('WAWebCollections').Chat.getModelsArray();
-        const chatPromises = chats.map((chat) =>
-            window.WWebJS.getChatModel(chat),
-        );
-        return await Promise.all(chatPromises);
+        const chatPromises = chats.map(async (chat) => {
+            try {
+                return await window.WWebJS.getChatModel(chat);
+            } catch (err) {
+                console.error(
+                    '[wwebjs] Error serializing chat:',
+                    chat?.id,
+                    err,
+                );
+                return null;
+            }
+        });
+        const results = await Promise.all(chatPromises);
+        return results.filter(Boolean);
     };
 
     window.WWebJS.getChannels = async () => {
         const channels = window
             .require('WAWebCollections')
             .WAWebNewsletterCollection.getModelsArray();
-        const channelPromises = channels?.map((channel) =>
-            window.WWebJS.getChatModel(channel, { isChannel: true }),
-        );
-        return await Promise.all(channelPromises);
+        const channelPromises = channels?.map(async (channel) => {
+            try {
+                return await window.WWebJS.getChatModel(channel, {
+                    isChannel: true,
+                });
+            } catch (err) {
+                console.error(
+                    '[wwebjs] Error serializing channel:',
+                    channel?.id,
+                    err,
+                );
+                return null;
+            }
+        });
+        const results = await Promise.all(channelPromises || []);
+        return results.filter(Boolean);
     };
 
     window.WWebJS.getChatModel = async (chat, { isChannel = false } = {}) => {
         if (!chat) return null;
 
         const model = chat.serialize();
+        if (model.id) {
+            if (typeof model.id === 'string') {
+                model.id = {
+                    _serialized: model.id,
+                    user: model.id.split('@')[0],
+                    server: model.id.split('@')[1] || null,
+                };
+            } else if (model.id._serialized == null) {
+                const serialized =
+                    window.WWebJS.getSerializedId(model.id) ||
+                    window.WWebJS.getSerializedId(chat.id);
+                if (serialized) {
+                    model.id = Object.assign({}, model.id, {
+                        _serialized: serialized,
+                    });
+                }
+            }
+        }
         model.isGroup = false;
         model.isMuted = chat.mute?.expiration !== 0;
         if (isChannel) {
@@ -961,7 +1018,7 @@ exports.LoadUtils = () => {
             model.isGroup = true;
             const chatWid = window
                 .require('WAWebWidFactory')
-                .createWid(chat.id._serialized || chat.id.$1);
+                .createWid(window.WWebJS.getSerializedId(chat.id) || chat.id);
             const groupMetadata =
                 window.require('WAWebCollections').GroupMetadata ||
                 window.require('WAWebCollections').WAWebGroupMetadataCollection;
@@ -990,7 +1047,7 @@ exports.LoadUtils = () => {
         model.lastMessage = null;
         if (model.msgs && model.msgs.length) {
             const _lastReceivedKeyId = chat.lastReceivedKey
-                ? chat.lastReceivedKey._serialized || chat.lastReceivedKey.$1
+                ? window.WWebJS.getSerializedId(chat.lastReceivedKey)
                 : null;
             const lastMessage = _lastReceivedKeyId
                 ? window
@@ -1016,6 +1073,25 @@ exports.LoadUtils = () => {
 
     window.WWebJS.getContactModel = (contact) => {
         let res = contact.serialize();
+
+        if (res.id) {
+            if (typeof res.id === 'string') {
+                res.id = {
+                    _serialized: res.id,
+                    user: res.id.split('@')[0],
+                    server: res.id.split('@')[1] || null,
+                };
+            } else if (res.id._serialized == null) {
+                const serialized =
+                    window.WWebJS.getSerializedId(res.id) ||
+                    window.WWebJS.getSerializedId(contact.id);
+                if (serialized) {
+                    res.id = Object.assign({}, res.id, {
+                        _serialized: serialized,
+                    });
+                }
+            }
+        }
 
         const wid = window
             .require('WAWebWidFactory')
@@ -1087,15 +1163,24 @@ exports.LoadUtils = () => {
             .Contact.getModelsArray();
         return Promise.all(
             contacts.map(async (contact) => {
-                if (contact.isBusiness || contact.isEnterprise) {
-                    await window
-                        .require('WAWebCollections')
-                        .BusinessProfile.find(contact.id)
-                        .catch(() => {});
+                try {
+                    if (contact.isBusiness || contact.isEnterprise) {
+                        await window
+                            .require('WAWebCollections')
+                            .BusinessProfile.find(contact.id)
+                            .catch(() => {});
+                    }
+                    return window.WWebJS.getContactModel(contact);
+                } catch (err) {
+                    console.error(
+                        '[wwebjs] Error serializing contact:',
+                        contact?.id,
+                        err,
+                    );
+                    return null;
                 }
-                return window.WWebJS.getContactModel(contact);
             }),
-        );
+        ).then((results) => results.filter(Boolean));
     };
 
     window.WWebJS.mediaInfoToFile = ({ data, mimetype, filename }) => {
