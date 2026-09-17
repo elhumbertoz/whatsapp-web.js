@@ -594,9 +594,10 @@ exports.LoadUtils = () => {
 
         if (options.waitUntilMsgSent) await sendMsgResultPromise;
 
-        return window
-            .require('WAWebCollections')
-            .Msg.get(newMsgKey._serialized || newMsgKey.$1);
+        const serializedMsgId = window.WWebJS.getSerializedId(newMsgKey);
+        if (!serializedMsgId) return null;
+
+        return window.require('WAWebCollections').Msg.get(serializedMsgId);
     };
 
     window.WWebJS.editMessage = async (msg, content, options = {}) => {
@@ -639,9 +640,10 @@ exports.LoadUtils = () => {
         await window
             .require('WAWebSendMessageEditAction')
             .sendMessageEdit(msg, content, internalOptions);
-        return window
-            .require('WAWebCollections')
-            .Msg.get(msg.id._serialized || msg.id.$1);
+        const serializedMsgId = window.WWebJS.getSerializedId(msg.id);
+        if (!serializedMsgId) return null;
+
+        return window.require('WAWebCollections').Msg.get(serializedMsgId);
     };
 
     window.WWebJS.toStickerData = async (mediaInfo) => {
