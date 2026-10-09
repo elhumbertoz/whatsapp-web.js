@@ -3,6 +3,26 @@
 exports.LoadUtils = () => {
     window.WWebJS = {};
 
+    // Newer WhatsApp Web builds expose the serialized MsgKey as $1 instead of
+    // _serialized. Restore the property for page-side WhatsApp modules too.
+    const msgKeyPrototype = window.require('WAWebMsgKey').prototype;
+    if (!Object.getOwnPropertyDescriptor(msgKeyPrototype, '_serialized')) {
+        Object.defineProperty(msgKeyPrototype, '_serialized', {
+            get() {
+                return this.toString();
+            },
+            set(value) {
+                Object.defineProperty(this, '_serialized', {
+                    value,
+                    writable: true,
+                    enumerable: true,
+                    configurable: true,
+                });
+            },
+            configurable: true,
+        });
+    }
+
     window.WWebJS.getSerializedId = (id) => {
         if (!id) return null;
         if (typeof id === 'string') return id;

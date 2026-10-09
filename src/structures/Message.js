@@ -429,26 +429,48 @@ class Message extends Base {
 
     /**
      * Returns the quoted message, if any
-     * @returns {Promise<Message>}
+     * @returns {Promise<Message|undefined>}
      */
     async getQuotedMessage() {
         if (!this.hasQuotedMsg) return undefined;
 
         const quotedMsg = await this.client.pupPage.evaluate(async (msgId) => {
-            const msg =
-                window.require('WAWebCollections').Msg.get(msgId) ||
-                (
-                    await window
-                        .require('WAWebCollections')
-                        .Msg.getMessagesById([msgId])
-                )?.messages?.[0];
-            const quotedMsg = window
-                .require('WAWebQuotedMsgModelUtils')
-                .getQuotedMsgObj(msg);
-            return window.WWebJS.getMessageModel(quotedMsg);
+            const messages = window.require('WAWebCollections').Msg;
+            let msg = messages.get(msgId);
+            if (!msg) {
+                try {
+                    msg = (await messages.getMessagesById([msgId]))
+                        ?.messages?.[0];
+                } catch (error) {
+                    throw new Error(
+                        `getQuotedMessage: error al cargar el mensaje ${msgId}: ${error?.stack || error}`,
+                    );
+                }
+            }
+            if (!msg) return null;
+
+            let quoted;
+            try {
+                quoted = window
+                    .require('WAWebQuotedMsgModelUtils')
+                    .getQuotedMsgObj(msg);
+            } catch (error) {
+                throw new Error(
+                    `getQuotedMessage: error al obtener la cita de ${msgId}: ${error?.stack || error}`,
+                );
+            }
+            if (!quoted) return null;
+
+            try {
+                return window.WWebJS.getMessageModel(quoted);
+            } catch (error) {
+                throw new Error(
+                    `getQuotedMessage: error al serializar la cita de ${msgId}: ${error?.stack || error}`,
+                );
+            }
         }, this.id._serialized);
 
-        return new Message(this.client, quotedMsg);
+        return quotedMsg ? new Message(this.client, quotedMsg) : undefined;
     }
 
     /**
