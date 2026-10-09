@@ -234,13 +234,10 @@ class GroupChat extends Chat {
                         if (
                             rpcResult.name ===
                                 'ParticipantRequestCodeCanBeSent' &&
-                            (userChat =
-                                window
-                                    .require('WAWebCollections')
-                                    .Chat.get(pWid) ||
-                                (await window
-                                    .require('WAWebCollections')
-                                    .Chat.find(pWid)))
+                            (userChat = await window.WWebJS.getChat(
+                                window.WWebJS.getSerializedId(pWid),
+                                { getAsModel: false },
+                            ))
                         ) {
                             const groupName =
                                 group.formattedTitle || group.name;
