@@ -43,16 +43,18 @@ exports.LoadUtils = () => {
      *
      * Motivo (WA Web 2.3000.x): el módulo devuelve `{ url, data: {...} }`
      * pero con `data.thumbnail === ""` (sin imagen). Propagar ese string
-     * vacío suprime la miniatura en el teléfono. Al omitirlo, el cliente
-     * puede resolver la imagen por su cuenta a partir de la URL canónica.
-     * Además acepta la forma directa (sin envoltura `.data`) por si una
-     * futura versión de WA cambia la forma de nuevo.
+     * vacío suprime la miniatura en el teléfono. Además acepta la forma
+     * directa (sin envoltura `.data`) por si una futura versión de WA
+     * cambia la forma de nuevo.
      *
      * @param {object|null} preview Resultado crudo de getLinkPreview()
+     * @param {string} [thumbnailAlternativo] Miniatura base64 generada fuera
+     * de WA (p. ej. OG-image descargada en el servidor). Solo se usa si WA
+     * no aporta una propia; la de WA siempre tiene prioridad.
      * @returns {object|null} Campos listos para mezclar en `options`, o null
      * si no hay nada utilizable.
      */
-    window.WWebJS.normalizarPreviewLink = (preview) => {
+    window.WWebJS.normalizarPreviewLink = (preview, thumbnailAlternativo) => {
         if (!preview) return null;
         const datos = preview.data ? preview.data : preview;
         if (
@@ -70,7 +72,11 @@ exports.LoadUtils = () => {
         // Un thumbnail vacío (""/null/undefined) es peor que ausente:
         // pisa la resolución de imagen del teléfono con "nada".
         if (!normalizado.thumbnail) {
-            delete normalizado.thumbnail;
+            if (thumbnailAlternativo) {
+                normalizado.thumbnail = thumbnailAlternativo;
+            } else {
+                delete normalizado.thumbnail;
+            }
         }
         // Nunca propagar la envoltura cruda.
         delete normalizado.data;
@@ -420,8 +426,16 @@ exports.LoadUtils = () => {
                     const preview = await window
                         .require('WAWebLinkPreviewChatAction')
                         .getLinkPreview(link);
-                    const normalizado =
-                        window.WWebJS.normalizarPreviewLink(preview);
+                    // Miniatura generada fuera de WA (p. ej. OG-image
+                    // descargada en el servidor): solo se usa si WA no
+                    // aporta una propia. Ver normalizarPreviewLink().
+                    const alternativo =
+                        options.extraOptions &&
+                        options.extraOptions.linkPreviewThumbnailFallback;
+                    const normalizado = window.WWebJS.normalizarPreviewLink(
+                        preview,
+                        alternativo,
+                    );
                     if (normalizado) {
                         options = { ...options, ...normalizado };
                     }
@@ -529,6 +543,9 @@ exports.LoadUtils = () => {
 
         const extraOptions = options.extraOptions || {};
         delete options.extraOptions;
+        // Clave interna consumida por el bloque linkPreview: no debe llegar
+        // al modelo del mensaje (la miniatura ya viaja en `thumbnail`).
+        delete extraOptions.linkPreviewThumbnailFallback;
 
         const ephemeralFields = window
             .require('WAWebGetEphemeralFieldsMsgActionsUtils')
@@ -671,6 +688,9 @@ exports.LoadUtils = () => {
     window.WWebJS.editMessage = async (msg, content, options = {}) => {
         const extraOptions = options.extraOptions || {};
         delete options.extraOptions;
+        // Clave interna consumida por el bloque linkPreview (ver sendMessage).
+        const alternativoEdicion = extraOptions.linkPreviewThumbnailFallback;
+        delete extraOptions.linkPreviewThumbnailFallback;
 
         if (options.mentionedJidList) {
             options.mentionedJidList = options.mentionedJidList.map((id) =>
@@ -695,8 +715,10 @@ exports.LoadUtils = () => {
                     const preview = await window
                         .require('WAWebLinkPreviewChatAction')
                         .getLinkPreview(link);
-                    const normalizado =
-                        window.WWebJS.normalizarPreviewLink(preview);
+                    const normalizado = window.WWebJS.normalizarPreviewLink(
+                        preview,
+                        alternativoEdicion,
+                    );
                     if (normalizado) {
                         options = { ...options, ...normalizado };
                     }
