@@ -38,6 +38,46 @@ exports.LoadUtils = () => {
     };
 
     /**
+     * Normaliza el resultado de `WAWebLinkPreviewChatAction.getLinkPreview()`
+     * a los campos que `addAndSendMsgToChat` espera en el mensaje.
+     *
+     * Motivo (WA Web 2.3000.x): el módulo devuelve `{ url, data: {...} }`
+     * pero con `data.thumbnail === ""` (sin imagen). Propagar ese string
+     * vacío suprime la miniatura en el teléfono. Al omitirlo, el cliente
+     * puede resolver la imagen por su cuenta a partir de la URL canónica.
+     * Además acepta la forma directa (sin envoltura `.data`) por si una
+     * futura versión de WA cambia la forma de nuevo.
+     *
+     * @param {object|null} preview Resultado crudo de getLinkPreview()
+     * @returns {object|null} Campos listos para mezclar en `options`, o null
+     * si no hay nada utilizable.
+     */
+    window.WWebJS.normalizarPreviewLink = (preview) => {
+        if (!preview) return null;
+        const datos = preview.data ? preview.data : preview;
+        if (
+            !datos ||
+            (!datos.title &&
+                !datos.description &&
+                !datos.url &&
+                !datos.matchedText)
+        ) {
+            return null;
+        }
+        const normalizado = { ...datos };
+        normalizado.preview = true;
+        normalizado.subtype = 'url';
+        // Un thumbnail vacío (""/null/undefined) es peor que ausente:
+        // pisa la resolución de imagen del teléfono con "nada".
+        if (!normalizado.thumbnail) {
+            delete normalizado.thumbnail;
+        }
+        // Nunca propagar la envoltura cruda.
+        delete normalizado.data;
+        return normalizado;
+    };
+
+    /**
      * Helper function that compares between two WWeb versions. Its purpose is to help the developer to choose the correct code implementation depending on the comparison value and the WWeb version.
      * @param {string} lOperand The left operand for the WWeb version string to compare with
      * @param {string} operator The comparison operator
@@ -376,14 +416,17 @@ exports.LoadUtils = () => {
             delete options.linkPreview;
             const link = findLink(content);
             if (link) {
-                let preview = await window
-                    .require('WAWebLinkPreviewChatAction')
-                    .getLinkPreview(link);
-                if (preview && preview.data) {
-                    preview = preview.data;
-                    preview.preview = true;
-                    preview.subtype = 'url';
-                    options = { ...options, ...preview };
+                try {
+                    const preview = await window
+                        .require('WAWebLinkPreviewChatAction')
+                        .getLinkPreview(link);
+                    const normalizado =
+                        window.WWebJS.normalizarPreviewLink(preview);
+                    if (normalizado) {
+                        options = { ...options, ...normalizado };
+                    }
+                } catch (ignoredError) {
+                    // Sin tarjeta: el texto se envía igual, sin preview.
                 }
             }
         }
@@ -648,12 +691,18 @@ exports.LoadUtils = () => {
             delete options.linkPreview;
             const link = findLink(content);
             if (link) {
-                const preview = await window
-                    .require('WAWebLinkPreviewChatAction')
-                    .getLinkPreview(link);
-                preview.preview = true;
-                preview.subtype = 'url';
-                options = { ...options, ...preview };
+                try {
+                    const preview = await window
+                        .require('WAWebLinkPreviewChatAction')
+                        .getLinkPreview(link);
+                    const normalizado =
+                        window.WWebJS.normalizarPreviewLink(preview);
+                    if (normalizado) {
+                        options = { ...options, ...normalizado };
+                    }
+                } catch (ignoredError) {
+                    // Sin tarjeta: la edición se aplica igual, sin preview.
+                }
             }
         }
 
