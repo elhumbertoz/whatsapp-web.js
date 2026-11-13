@@ -3,17 +3,17 @@
 > Este archivo es el **punto de partida** para no empezar cada revisión desde cero.
 > Actualizarlo en cada revisión. Última actualización abajo.
 
-## 1. Punto de partida actual — Revisión #1
+## 1. Punto de partida actual — Revisión #2
 
-- **Fecha (UTC):** 2026-10-09
+- **Fecha (UTC):** 2026-11-13
 - **Rama local:** `main` (`origin/main` = `elhumbertoz/whatsapp-web.js`)
 - **Upstream:** `https://github.com/wwebjs/whatsapp-web.js` (remoto `upstream`)
-- **Upstream HEAD revisado:** `064a3d5a5a3dce1281a6a12740b5a7051339d154` (2026-09-28)
-- **Merge-base en esta revisión:** `1780711a1c86dfeca7c5ba6a66f950eac93dde28`
-  (`fix: prevent duplicate ready events on SPA re-injection (#201653)`, 2026-06-25)
-- **Divergencia en esta revisión:** `origin/main` 73 commits por delante,
-  `upstream/main` 3 commits por delante del merge-base.
-- **Estado:** revisado y portado lo necesario. Rama local limpia salvo el cambio de esta revisión.
+- **Upstream HEAD revisado:** `eb076b0` (v1.34.8, 2026-11-12)
+- **Merge-base anterior:** `1780711` (2026-06-25)
+- **Estado:** merge `upstream/main` (v1.34.8) completado. Se adoptó `src/Client.js`
+  de upstream y se eliminó la inyección `ExposeStore/AuthStore/LegacyStore`
+  (causa del `TypeError: Cannot read properties of null (reading 'Socket')`
+  del 2026-11-13). Se conservaron los customs vigentes (ver 2.4).
 
 ### Cómo retomar en la próxima revisión (en unas días/semanas)
 
@@ -86,10 +86,10 @@ siempre por **cherry-pick / port manual**, nunca por merge completo sin revisar.
 
 ## 3. Historial de revisiones
 
-| #   | Fecha         | Upstream HEAD revisado | Merge-base             | Acción                                                                                                                     |
-| --- | ------------- | ---------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| 1   | 2026-10-09    | `064a3d5` (2026-09-28) | `1780711` (2026-06-25) | Portado `942d236` adaptado a `getSerializedId`. `58ddf15` y `064a3d5` ya cubiertos (superset local). Creado este registro. |
-| 2   | _(pendiente)_ |                        |                        | Ejecutar comandos de la sección 1 y añadir fila.                                                                           |
+| #   | Fecha      | Upstream HEAD revisado         | Merge-base             | Acción                                                                                                                                                                                                                                                                                                                                                                                                        |
+| --- | ---------- | ------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 2026-10-09 | `064a3d5` (2026-09-28)         | `1780711` (2026-06-25) | Portado `942d236` adaptado a `getSerializedId`. `58ddf15` y `064a3d5` ya cubiertos (superset local). Creado este registro.                                                                                                                                                                                                                                                                                    |
+| 2   | 2026-11-13 | `eb076b0` v1.34.8 (2026-11-12) | `1780711` (2026-06-25) | Merge upstream v1.34.8. Adoptado `Client.js` upstream; eliminados `Store/LegacyStore/AuthStore` y dep `moduleraid` (causaban `null.Socket` con WA Web actual). Conservados customs vigentes: `Base._normalizeId` extendido, extras `GroupChat`, `getQuotedMessage` robusto, `Utils` (`getSerializedId`, `normalizarPreviewLink`, `getChats` tolerante), `Puppeteer` stale-binding, `tests/quoted-message.js`. |
 
 ---
 

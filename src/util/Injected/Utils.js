@@ -581,7 +581,6 @@ exports.LoadUtils = () => {
         // private id field when its enumerable properties are spread above.
         // Keeping it would replace the MsgKey during model initialization.
         delete message.__x_id;
-
         // Bot's won't reply if canonicalUrl is set (linking)
         if (botOptions) {
             delete message.canonicalUrl;
