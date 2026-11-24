@@ -139,20 +139,39 @@ class Client extends EventEmitter {
 
             const needAuthHandle = await this.pupPage.waitForFunction(
                 () => {
-                    const state =
-                        window.require?.('WAWebSocketModel')?.Socket?.state;
-                    if (
-                        !state ||
-                        state === 'OPENING' ||
-                        state === 'UNLAUNCHED' ||
-                        state === 'PAIRING'
-                    ) {
+                    // WA Web 2.3000.1056xxx eliminó WAWebSocketModel: el estado
+                    // vive en WAWebConnModel.Conn (ref = QR pendiente, wid = vinculado).
+                    try {
+                        const Conn =
+                            window.require?.('WAWebConnModel')?.Conn;
+                        if (Conn) {
+                            if (Conn.ref) {
+                                return { need: true, state: 'UNPAIRED' };
+                            }
+                            if (Conn.wid) {
+                                return { need: false, state: 'CONNECTED' };
+                            }
+                        }
+                    } catch (e) { /* módulo aún no cargado */ }
+                    // Compat: builds anteriores con WAWebSocketModel.
+                    try {
+                        const state =
+                            window.require?.('WAWebSocketModel')?.Socket?.state;
+                        if (
+                            !state ||
+                            state === 'OPENING' ||
+                            state === 'UNLAUNCHED' ||
+                            state === 'PAIRING'
+                        ) {
+                            return false;
+                        }
+                        return {
+                            need: state === 'UNPAIRED' || state === 'UNPAIRED_IDLE',
+                            state,
+                        };
+                    } catch (e) {
                         return false;
                     }
-                    return {
-                        need: state === 'UNPAIRED' || state === 'UNPAIRED_IDLE',
-                        state,
-                    };
                 },
                 { timeout: authTimeout, polling: 200 },
             );
@@ -259,14 +278,20 @@ class Client extends EventEmitter {
                             .require('WAWebConnModel')
                             .Conn.on('change:ref', onRefChange); // future QR changes
 
-                        // Remove QR listener once authentication succeeds
-                        window
-                            .require('WAWebSocketModel')
-                            .Socket.on('change:hasSynced', () => {
-                                window
-                                    .require('WAWebConnModel')
-                                    .Conn.off('change:ref', onRefChange);
-                            });
+                        // Remove QR listener once authentication succeeds.
+                        // En builds sin WAWebSocketModel no hay evento de sync;
+                        // el listener se limpia al destruir (best-effort).
+                        try {
+                            const Sock = window.require('WAWebSocketModel') &&
+                                window.require('WAWebSocketModel').Socket;
+                            if (Sock) {
+                                Sock.on('change:hasSynced', () => {
+                                    window
+                                        .require('WAWebConnModel')
+                                        .Conn.off('change:ref', onRefChange);
+                                });
+                            }
+                        } catch (e) { /* sin WAWebSocketModel */ }
                     });
                 }
             }
@@ -389,7 +414,11 @@ class Client extends EventEmitter {
                 },
             );
             await this.pupPage.evaluate(() => {
-                const Socket = window.require('WAWebSocketModel').Socket;
+                // WA Web 2.3000.1056xxx eliminó WAWebSocketModel: Socket puede
+                // ser null; los listeners nulos se omiten al adjuntar/limpiar.
+                const Socket = window.require('WAWebSocketModel')
+                    ? window.require('WAWebSocketModel').Socket
+                    : null;
                 const Cmd = window.require('WAWebCmd').Cmd;
 
                 const listeners = [
@@ -437,12 +466,12 @@ class Client extends EventEmitter {
                 // Clean up old listeners to prevent accumulation on re-inject
                 if (window._wwjsListeners) {
                     for (const [obj, event, handler] of window._wwjsListeners) {
-                        obj.off(event, handler);
+                        if (obj) obj.off(event, handler);
                     }
                 }
 
                 for (const [obj, event, handler] of listeners) {
-                    obj.on(event, handler);
+                    if (obj) obj.on(event, handler);
                 }
                 window._wwjsListeners = listeners;
 
@@ -450,7 +479,7 @@ class Client extends EventEmitter {
                 // If hasSynced is already true, Backbone won't fire change:hasSynced (no transition).
                 // If hasSynced is false, the listener above will catch the future transition.
                 const storeInjected = typeof window.WWebJS !== 'undefined';
-                if (Socket.hasSynced === true && !storeInjected) {
+                if (Socket && Socket.hasSynced === true && !storeInjected) {
                     window.onAppStateHasSyncedEvent();
                 }
             });
@@ -891,11 +920,14 @@ class Client extends EventEmitter {
 
                     if (state === WAState.CONFLICT) {
                         setTimeout(() => {
-                            this.pupPage.evaluate(() =>
-                                window
-                                    .require('WAWebSocketModel')
-                                    .Socket.takeover(),
-                            );
+                            this.pupPage.evaluate(() => {
+                                try {
+                                    const Sock =
+                                        window.require('WAWebSocketModel') &&
+                                        window.require('WAWebSocketModel').Socket;
+                                    if (Sock) Sock.takeover();
+                                } catch (e) { /* sin WAWebSocketModel */ }
+                            });
                         }, this.options.takeoverTimeoutMs);
                     }
                 }
@@ -1080,7 +1112,9 @@ class Client extends EventEmitter {
 
         await this.pupPage.evaluate(() => {
             const { Msg, Chat } = window.require('WAWebCollections');
-            const AppState = window.require('WAWebSocketModel').Socket;
+            const AppState = window.require('WAWebSocketModel')
+                ? window.require('WAWebSocketModel').Socket
+                : null;
 
             // Enable placeholder message resend (recovery for ciphertext messages)
             const gatingUtils = window.require('WAWebSyncGatingUtils');
@@ -1119,9 +1153,10 @@ class Client extends EventEmitter {
                     prevBody,
                 );
             });
-            AppState.on('change:state', (_AppState, state) => {
-                window.onAppStateChangedEvent(state);
-            });
+            AppState &&
+                AppState.on('change:state', (_AppState, state) => {
+                    window.onAppStateChangedEvent(state);
+                });
             window
                 .require('WAWebConnModel')
                 .Conn.on('change:battery', (state) => {
@@ -1351,7 +1386,10 @@ class Client extends EventEmitter {
      */
     async logout() {
         await this.pupPage.evaluate(() => {
-            return window.require('WAWebSocketModel').Socket.logout();
+            const Sock =
+                window.require('WAWebSocketModel') &&
+                window.require('WAWebSocketModel').Socket;
+            if (Sock) return Sock.logout();
         });
         await this.pupBrowser.close();
 
@@ -2037,7 +2075,19 @@ class Client extends EventEmitter {
      */
     async getState() {
         return await this.pupPage.evaluate(() => {
-            return window.require('WAWebSocketModel').Socket.state ?? null;
+            try {
+                const Sock =
+                    window.require('WAWebSocketModel') &&
+                    window.require('WAWebSocketModel').Socket;
+                if (Sock && Sock.state) return Sock.state;
+            } catch (e) { /* builds sin WAWebSocketModel */ }
+            // Fallback 2.3000.1056xxx: Conn.wid = vinculado, Conn.ref = QR pendiente.
+            try {
+                const Conn = window.require('WAWebConnModel').Conn;
+                if (Conn.wid) return 'CONNECTED';
+                if (Conn.ref) return 'UNPAIRED';
+            } catch (e) { /* aún cargando */ }
+            return null;
         });
     }
 
@@ -2265,7 +2315,10 @@ class Client extends EventEmitter {
      */
     async resetState() {
         await this.pupPage.evaluate(() => {
-            window.require('WAWebSocketModel').Socket.reconnect();
+            const Sock =
+                window.require('WAWebSocketModel') &&
+                window.require('WAWebSocketModel').Socket;
+            if (Sock) Sock.reconnect();
         });
     }
 
